@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { makeGroups } from '../lib/grouping'
 
 type Participant = {
   id: number
@@ -14,6 +15,8 @@ export default function Page() {
   const [name, setName] = useState('')
   const [hasReading, setHasReading] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const groups = makeGroups(participants)
+
 
   // Load participants from API
   async function loadParticipants() {
@@ -98,84 +101,140 @@ async function updateHasReading(id: number, value: boolean) {
   await loadParticipants()
 }
 
-  return (
-  <main className="p-6 max-w-xl mx-auto font-sans">
-    <h1 className="text-2xl font-bold mb-4">Reading Group Sign-Up</h1>
+return (
+  <main style={{ padding: 16 }}>
+    <h1>Reading Group Scheduler</h1>
 
-    {/* INPUT SECTION */}
-    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-8">
-      <input
-        type="text"
-        value={name}
-        placeholder="Enter your name"
-        onChange={(e) => setName(e.target.value)}
-        className="border border-gray-300 rounded-md px-4 py-2 w-full sm:w-auto"
-      />
+    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+      {/* LEFT COLUMN: form + full participant list */}
+      <div style={{ flex: 1, border: '1px solid #ccc', padding: 8 }}>
+        <h2>Participants</h2>
 
-      <label className="inline-flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={hasReading}
-          onChange={(e) => setHasReading(e.target.checked)}
-          className="h-4 w-4"
-        />
-        <span>Has something to read</span>
-      </label>
+        {/* Simple form */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ marginBottom: 8 }}>
+            <input
+              type="text"
+              value={name}
+              placeholder="Enter your name"
+              onChange={e => setName(e.target.value)}
+            />
+          </div>
 
-      <button
-        onClick={handleAdd}
-        disabled={isLoading}
-        className="
-          bg-blue-600 hover:bg-blue-700 
-          text-white font-semibold 
-          px-5 py-2 rounded-md shadow 
-          disabled:opacity-50 disabled:cursor-not-allowed
-        "
-      >
-        {isLoading ? 'Adding…' : 'Add to list'}
-      </button>
-    </div>
-
-    {/* LIST */}
-    <h2 className="text-xl font-semibold mb-2">
-      Current Participants ({participants.length})
-    </h2>
-
-  {participants.length === 0 ? (
-  <p className="text-gray-500">No one signed up yet.</p>
-) : (
-  <ul className="space-y-2">
-    {participants.map((p) => (
-      <li
-        key={p.id}
-        className="flex items-center justify-between border border-gray-200 rounded-md px-4 py-2 bg-white shadow-sm"
-      >
-        <div className="flex flex-col">
-          <span className="font-medium">{p.name}</span>
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700 mt-1">
+          <label style={{ display: 'block', marginBottom: 8 }}>
             <input
               type="checkbox"
-              checked={p.has_reading}
-              onChange={(e) =>
-                updateHasReading(p.id, e.target.checked)
-              }
-              className="h-4 w-4"
-            />
-            <span>Has something to read</span>
+              checked={hasReading}
+              onChange={e => setHasReading(e.target.checked)}
+            />{' '}
+            Has something to read
           </label>
+
+          <button
+            onClick={handleAdd}
+            disabled={!name.trim()}
+          >
+            Add
+          </button>
         </div>
 
-        <button
-          onClick={() => deleteParticipant(p.id)}
-          className="text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-md"
-        >
-          Delete
-        </button>
-      </li>
-    ))}
-  </ul>
-)}
+        <h3>All participants ({participants.length})</h3>
+        {participants.length === 0 ? (
+          <p>No one yet.</p>
+        ) : (
+          <ul>
+            {participants.map(p => (
+              <li key={p.id}>
+                <strong>{p.name}</strong>{' '}
+                {p.has_reading ? '(reader)' : ''}{' '}
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={p.has_reading}
+                    onChange={e =>
+                      updateHasReading(p.id, e.target.checked)
+                    }
+                  />{' '}
+                  has reading
+                </label>{' '}
+                <button onClick={() => deleteParticipant(p.id)}>
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
+      {/* RIGHT COLUMN: groups */}
+      <div style={{ flex: 1, border: '1px solid #ccc', padding: 8 }}>
+        <h2>Groups</h2>
+
+        {groups.error && (
+          <p style={{ color: 'red' }}>{groups.error}</p>
+        )}
+
+        {/* Table group */}
+        <div style={{ marginBottom: 12 }}>
+          <h3>Table</h3>
+          {groups.table.length === 0 ? (
+            <p>No one at the table.</p>
+          ) : (
+            <ul>
+              {groups.table.map(p => (
+                <li key={p.id}>
+                  <strong>{p.name}</strong>{' '}
+                  {p.has_reading ? '(reader)' : ''}{' '}
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={p.has_reading}
+                      onChange={e =>
+                        updateHasReading(p.id, e.target.checked)
+                      }
+                    />{' '}
+                    has reading
+                  </label>{' '}
+                  <button onClick={() => deleteParticipant(p.id)}>
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Lounge group */}
+        <div>
+          <h3>Lounge</h3>
+          {groups.lounge.length === 0 ? (
+            <p>No one in the lounge.</p>
+          ) : (
+            <ul>
+              {groups.lounge.map(p => (
+                <li key={p.id}>
+                  <strong>{p.name}</strong>{' '}
+                  {p.has_reading ? '(reader)' : ''}{' '}
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={p.has_reading}
+                      onChange={e =>
+                        updateHasReading(p.id, e.target.checked)
+                      }
+                    />{' '}
+                    has reading
+                  </label>{' '}
+                  <button onClick={() => deleteParticipant(p.id)}>
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
   </main>
 )
 
