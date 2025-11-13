@@ -102,13 +102,17 @@ async function updateHasReading(id: number, value: boolean) {
 }
 
 return (
-  <main style={{ padding: 16 }}>
-    <h1>Reading Group Scheduler</h1>
+  <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
+    <h1 className='mt-0'></h1>
 
-    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+        <h1 className="absolute-bottom pt-10  text-gray-900 text-[5rem] bold flex items-center justify-center mb-4 mr-20text-xl mx-4">Do Write Scheduler</h1>
+
+  
+
+    <div className="flex gap-4 items-stretch p-4 rounded-md -4"> 
       {/* LEFT COLUMN: form + full participant list */}
-      <div style={{ flex: 1, border: '1px solid #ccc', padding: 8 }}>
-        <h2>Participants</h2>
+      <div className="flex-1  flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
+        <h2 className='font-bold text-black text-xl mb-2'>Participants</h2>
 
         {/* Simple form */}
         <div style={{ marginBottom: 12 }}>
@@ -118,7 +122,15 @@ return (
               value={name}
               placeholder="Enter your name"
               onChange={e => setName(e.target.value)}
+              className="ml-2 px-2 bg-white text-black rounded-md"
             />
+             <button
+            className="ml-2 px-2 bg-white text-black rounded-md"
+            onClick={handleAdd}
+            disabled={!name.trim()}
+          >
+            Add
+          </button>
           </div>
 
           <label style={{ display: 'block', marginBottom: 8 }}>
@@ -126,19 +138,13 @@ return (
               type="checkbox"
               checked={hasReading}
               onChange={e => setHasReading(e.target.checked)}
+              className="ml-2 px-2 bg-white text-black rounded-md"
             />{' '}
-            Has something to read
+            Pages
           </label>
-
-          <button
-            onClick={handleAdd}
-            disabled={!name.trim()}
-          >
-            Add
-          </button>
         </div>
-
-        <h3>All participants ({participants.length})</h3>
+  <hr className="my-1" />
+        <h3 className='font-semibold text-md mb-2'>All participants ({participants.length})</h3>
         {participants.length === 0 ? (
           <p>No one yet.</p>
         ) : (
@@ -167,22 +173,22 @@ return (
       </div>
 
       {/* RIGHT COLUMN: groups */}
-      <div style={{ flex: 1, border: '1px solid #ccc', padding: 8 }}>
-        <h2>Groups</h2>
+      <div className="flex-1  flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
+        <h2 className='font-bold text-black text-xl mb-2'>Groups</h2>
 
         {groups.error && (
-          <p style={{ color: 'red' }}>{groups.error}</p>
+          <p className="text-red-500">{groups.error}</p>
         )}
 
         {/* Table group */}
         <div style={{ marginBottom: 12 }}>
-          <h3>Table</h3>
+          <h3 className='font-semibold text-md mb-2'>Table</h3>
           {groups.table.length === 0 ? (
             <p>No one at the table.</p>
           ) : (
-            <ul>
+            <ul className='ml-4'>
               {groups.table.map(p => (
-                <li key={p.id}>
+                <li className="m-2"key={p.id}>
                   <strong>{p.name}</strong>{' '}
                   {p.has_reading ? '(reader)' : ''}{' '}
                   <label>
@@ -195,7 +201,7 @@ return (
                     />{' '}
                     has reading
                   </label>{' '}
-                  <button onClick={() => deleteParticipant(p.id)}>
+                  <button className="ml-2  px-2 bg-white text-black rounded-md" onClick={() => deleteParticipant(p.id)}>
                     Delete
                   </button>
                 </li>
@@ -203,16 +209,16 @@ return (
             </ul>
           )}
         </div>
-
+          <hr className="my-4" />
         {/* Lounge group */}
         <div>
-          <h3>Lounge</h3>
+          <h3 className='font-semibold text-md mb-2'>Lounge</h3>
           {groups.lounge.length === 0 ? (
             <p>No one in the lounge.</p>
           ) : (
-            <ul>
+            <ul className='ml-4'>
               {groups.lounge.map(p => (
-                <li key={p.id}>
+                <li  className="m-2" key={p.id}>
                   <strong>{p.name}</strong>{' '}
                   {p.has_reading ? '(reader)' : ''}{' '}
                   <label>
@@ -225,7 +231,7 @@ return (
                     />{' '}
                     has reading
                   </label>{' '}
-                  <button onClick={() => deleteParticipant(p.id)}>
+                  <button className="ml-2 px-2 bg-white text-black rounded-md" onClick={() => deleteParticipant(p.id)}>
                     Delete
                   </button>
                 </li>
