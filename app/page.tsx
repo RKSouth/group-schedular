@@ -109,7 +109,7 @@ return (
 
   
 
-    <div className="flex gap-4 items-stretch p-4 rounded-md -4"> 
+    <div className="flex flex-col gap-4 items-stretch p-4 rounded-md -4"> 
       {/* LEFT COLUMN: form + full participant list */}
       <div className="flex-1  flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
         <h2 className='font-bold text-black text-xl mb-2'>Participants</h2>
