@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { makeGroups } from '../lib/grouping'
+
 
 type Participant = {
   id: number
@@ -13,9 +13,11 @@ type Participant = {
 export default function Page() {
   const [participants, setParticipants] = useState<Participant[]>([])
   const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
   const [hasReading, setHasReading] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const groups = makeGroups(participants)
+
 
 
   // Load participants from API
@@ -34,7 +36,7 @@ export default function Page() {
   }
 
   // Load once on mount
-  
+ // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => {
     loadParticipants()
   }, [])
@@ -42,6 +44,8 @@ export default function Page() {
   // Called when user clicks the button
   async function handleAdd() {
     if (!name.trim()) return
+    if (!email.trim()) return
+    if (!phoneNumber.trim()) return
 
     setIsLoading(true)
     try {
@@ -50,6 +54,8 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
+          email: email.trim(),
+          phoneNumber: phoneNumber.trim(),
           hasReading,
         }),
       })
@@ -104,25 +110,19 @@ async function updateHasReading(id: number, value: boolean) {
 return (
   <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
     <h1 className='mt-0'></h1>
-  <a
-  href="/admin/login"
-  className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1"
->
-  Admin
-</a>
-
-        <h1 className="absolute-bottom pt-10  text-gray-900 text-[5rem] bold flex items-center justify-center mb-4 mr-20text-xl mx-4">Do Write Scheduler</h1>
-
-  
+      <a href="/admin/logout" className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1">
+        Logout
+      </a>
+    <h1 className="absolute-bottom pt-10 text-gray-900 text-[3rem] bold flex items-center justify-center mb-4 mr-20text-xl mx-4">Administrator Page</h1>
 
     <div className="flex flex-col sm:flex-row gap-4 items-stretch p-4 rounded-md -4"> 
-      {/* LEFT COLUMN: form + full participant list */}
       <div className="flex-1  flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
-        <h2 className='font-bold text-black text-xl mb-2'>Participants</h2>
-
-        {/* Simple form */}
+         <h2 className='font-bold text-black text-xl mb-2'>Folks</h2>
+        <h4>Instructions: Here is where you can add, update or delete participants.</h4>
         <div style={{ marginBottom: 12 }}>
-          <div style={{ marginBottom: 8 }}>
+          <div className="mb-2">
+          <div className="mb-2">
+            <label htmlFor="name" className="font-medium text-black">Name:</label>
             <input
               type="text"
               value={name}
@@ -130,15 +130,28 @@ return (
               onChange={e => setName(e.target.value)}
               className="ml-2 px-2 bg-white text-black rounded-md"
             />
-             <button
-            className="ml-2 px-2 bg-white text-black rounded-md"
-            onClick={handleAdd}
-            disabled={!name.trim()}
-          >
-            Add
-          </button>
           </div>
-
+          <div className="mb-2">
+            <label htmlFor="email" className="font-medium text-black">Email:</label>
+            <input
+              type="text"
+              value={email}
+              placeholder="Enter your name"
+              onChange={e => setEmail(e.target.value)}
+              className="ml-2 px-2 bg-white text-black rounded-md"
+            />
+          </div>
+          <div className="mb-2">
+            <label htmlFor="phoneNumber" className="font-medium text-black">Cell:</label>
+            <input
+              type="text"
+              value={phoneNumber}
+              placeholder="1234567890"
+              onChange={e => setPhoneNumber(e.target.value)}
+              className="ml-2 px-2 bg-white text-black rounded-md"
+            />
+          </div>
+          </div>
           <label style={{ display: 'block', marginBottom: 8 }}>
             <input
               type="checkbox"
@@ -148,6 +161,12 @@ return (
             />{' '}
             Pages
           </label>
+          <button
+            className="ml-2 px-2 bg-white text-black rounded-md"
+            onClick={handleAdd}
+            disabled={!name.trim()}
+            >Add
+          </button>
         </div>
   <hr className="my-1" />
         <h3 className='font-semibold text-md mb-2'>All participants ({participants.length})</h3>
@@ -169,82 +188,20 @@ return (
                   />{' '}
                   has reading
                 </label>{' '}
-                <button onClick={() => deleteParticipant(p.id)}>
+                <button 
+                  className="ml-2 px-2 bg-white text-black rounded-md"
+                  onClick={() => deleteParticipant(p.id)}>
                   Delete
+                </button>
+                  <button 
+                  className="ml-2 px-2 bg-white text-black rounded-md"
+                  onClick={() => deleteParticipant(p.id)}>
+                  Update
                 </button>
               </li>
             ))}
           </ul>
         )}
-      </div>
-
-      {/* RIGHT COLUMN: groups */}
-      <div className="flex-1  flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
-        <h2 className='font-bold text-black text-xl mb-2'>Groups</h2>
-
-        {groups.error && (
-          <p className="text-red-500">{groups.error}</p>
-        )}
-
-        {/* Table group */}
-        <div style={{ marginBottom: 12 }}>
-          <h3 className='font-semibold text-md mb-2'>Table</h3>
-          {groups.table.length === 0 ? (
-            <p>No one at the table.</p>
-          ) : (
-            <ul className='ml-4'>
-              {groups.table.map(p => (
-                <li className="m-2"key={p.id}>
-                  <strong>{p.name}</strong>{' '}
-                  {p.has_reading ? '(reader)' : ''}{' '}
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={p.has_reading}
-                      onChange={e =>
-                        updateHasReading(p.id, e.target.checked)
-                      }
-                    />{' '}
-                    has reading
-                  </label>{' '}
-                  <button className="ml-2  px-2 bg-white text-black rounded-md" onClick={() => deleteParticipant(p.id)}>
-                    Delete
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-          <hr className="my-4" />
-        {/* Lounge group */}
-        <div>
-          <h3 className='font-semibold text-md mb-2'>Lounge</h3>
-          {groups.lounge.length === 0 ? (
-            <p>No one in the lounge.</p>
-          ) : (
-            <ul className='ml-4'>
-              {groups.lounge.map(p => (
-                <li  className="m-2" key={p.id}>
-                  <strong>{p.name}</strong>{' '}
-                  {p.has_reading ? '(reader)' : ''}{' '}
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={p.has_reading}
-                      onChange={e =>
-                        updateHasReading(p.id, e.target.checked)
-                      }
-                    />{' '}
-                    has reading
-                  </label>{' '}
-                  <button className="ml-2 px-2 bg-white text-black rounded-md" onClick={() => deleteParticipant(p.id)}>
-                    Delete
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
       </div>
     </div>
   </main>
