@@ -1,5 +1,8 @@
 // lib/grouping.ts
 
+export type AttendanceStatus = 'unknown' | 'yes' | 'no' | 'maybe'
+export type ReadingStatus = 'unassigned' | 'pending' | 'confirmed' | 'deferred'
+
 export type Participant = {
   id: number
   name: string
@@ -10,10 +13,13 @@ export type Participant = {
   // but you should pick ONE eventually.
   phoneNumber?: string | null
 
+  // "Eligible to read at all" (master preference)
   has_reading: boolean
 
-  // Optional: if you add this later (recommended), algorithm will skip them
-  deferred_this_week?: boolean
+  // NEW (weekly / cycle state) - optional so old callers still work
+  attendance?: AttendanceStatus
+  reading?: ReadingStatus
+  responded_at?: string | null
 }
 
 export type GroupReaders = {
@@ -26,10 +32,16 @@ export type GroupResult = {
   lounge: Participant[]
   error?: string
 
-  // NEW: reading assignments per group (B: 4 scheduled + 2 bonus per group)
   readers: {
     table: GroupReaders
     lounge: GroupReaders
+  }
+
+  // Optional, but useful for UI:
+  // who is currently "up next" (pending) or would be next (alphabetical) if none pending
+  upNext?: {
+    table: Participant | null
+    lounge: Participant | null
   }
 }
 
@@ -54,7 +66,6 @@ function shuffle<T>(arr: T[]): T[] {
 function getFirstName(name: string): string {
   const trimmed = name.trim()
   if (!trimmed) return ''
-  // split on whitespace, take first token
   return trimmed.split(/\s+/)[0] ?? ''
 }
 
@@ -65,13 +76,45 @@ function sortByFirstName(a: Participant, b: Participant): number {
   if (aFirst < bFirst) return -1
   if (aFirst > bFirst) return 1
 
-  // tie-break: full name then id for stability
   const aFull = a.name.toLowerCase()
   const bFull = b.name.toLowerCase()
   if (aFull < bFull) return -1
   if (aFull > bFull) return 1
 
   return a.id - b.id
+}
+
+function isAttending(p: Participant): boolean {
+  // If not provided, treat as eligible.
+  return (p.attendance ?? 'unknown') !== 'no'
+}
+
+function isEligibleToBePickedThisCycle(p: Participant): boolean {
+  if (!p.has_reading) return false
+  if (!isAttending(p)) return false
+
+  // If we have cycle state, skip these.
+  // (If cycle state is missing, defaults to 'unassigned'.)
+  const status = p.reading ?? 'unassigned'
+  if (status === 'deferred') return false
+  if (status === 'confirmed') return false
+  if (status === 'pending') return false
+
+  return true // unassigned
+}
+
+function getPendingOrAlphabeticalNext(groupMembers: Participant[]): Participant | null {
+  // If someone is already pending in this group, they are "up next"
+  const pending = groupMembers.find(p => (p.reading ?? 'unassigned') === 'pending')
+  if (pending) return pending
+
+  // Otherwise, choose alphabetical next eligible
+  const next = groupMembers
+    .filter(isEligibleToBePickedThisCycle)
+    .slice()
+    .sort(sortByFirstName)[0]
+
+  return next ?? null
 }
 
 function assignReadersForGroup(
@@ -82,7 +125,7 @@ function assignReadersForGroup(
 ): { readers: GroupReaders; nextStartIndex: number } {
   // eligible readers in this group, alphabetical by first name
   const eligible = groupMembers
-    .filter(participants => participants.has_reading)
+    .filter(isEligibleToBePickedThisCycle)
     .slice()
     .sort(sortByFirstName)
 
@@ -97,38 +140,35 @@ function assignReadersForGroup(
   let i = ((startIndex % n) + n) % n
   const picked = new Set<number>()
 
-  function takeNextNonDeferred(): Participant | null {
-    // scan up to n items to find someone who isn't deferred and not already picked
+  function takeNext(): Participant | null {
     for (let scan = 0; scan < n; scan++) {
-      const participants = eligible[i]
+      const p = eligible[i]
       i = (i + 1) % n
 
-      if (picked.has(participants.id)) continue
-      if (participants.deferred_this_week) continue
-
-      picked.add(participants.id)
-      return participants
+      if (picked.has(p.id)) continue
+      picked.add(p.id)
+      return p
     }
     return null
   }
 
   while (scheduled.length < scheduledQuota) {
-    const participants = takeNextNonDeferred()
-    if (!participants) break
-    scheduled.push(participants)
+    const p = takeNext()
+    if (!p) break
+    scheduled.push(p)
   }
 
   while (bonus.length < bonusQuota) {
-    const participants = takeNextNonDeferred()
-    if (!participants) break
-    bonus.push(participants)
+    const p = takeNext()
+    if (!p) break
+    bonus.push(p)
   }
 
   // Next week start AFTER the last scheduled reader
   let nextStartIndex = startIndex
   const lastScheduled = scheduled[scheduled.length - 1]
   if (lastScheduled) {
-    const lastIdx = eligible.findIndex(participants => participants.id === lastScheduled.id)
+    const lastIdx = eligible.findIndex(p => p.id === lastScheduled.id)
     nextStartIndex = lastIdx === -1 ? startIndex : (lastIdx + 1) % n
   }
 
@@ -138,7 +178,7 @@ function assignReadersForGroup(
 /**
  * makeGroups:
  * - <=8: one group (table), lounge empty
- * - >8: random split into 2 groups, ensure at least 2 readers per group
+ * - >8: random split into 2 groups, ensure 2 readers each
  * - also assigns readers per group (4 scheduled + 2 bonus per group), using alphabetical rotation
  */
 export function makeGroups(
@@ -149,11 +189,12 @@ export function makeGroups(
   const tableStartIndex = rotation?.tableStartIndex ?? 0
   const loungeStartIndex = rotation?.loungeStartIndex ?? 0
 
-  // <=10: everyone at the table, lounge empty
+  // NOTE: your comment said <=10 but code uses <=8; pick one.
   if (total <= 8) {
     const table = shuffle(participants)
 
     const tableReaders = assignReadersForGroup(table, tableStartIndex, 4, 2)
+
     return {
       table,
       lounge: [],
@@ -161,25 +202,32 @@ export function makeGroups(
         table: tableReaders.readers,
         lounge: { scheduled: [], bonus: [] },
       },
+      upNext: {
+        table: getPendingOrAlphabeticalNext(table),
+        lounge: null,
+      },
     }
   }
 
-  // >10: split into 2 groups, ensure 2 readers each
-  const readers = participants.filter(participants => participants.has_reading)
-  const nonReaders = participants.filter(participants => !participants.has_reading)
+  const readers = participants.filter(p => p.has_reading && isAttending(p))
+  const nonReaders = participants.filter(p => !p.has_reading || !isAttending(p))
 
-  // Need at least 4 readers total to guarantee 2 per group
+  // Need at least 4 eligible readers total to guarantee 2 per group
   if (readers.length < 4) {
     const table = shuffle(participants)
-
     const tableReaders = assignReadersForGroup(table, tableStartIndex, 4, 2)
+
     return {
       table,
       lounge: [],
-      error: 'Not enough readers to have at least 2 in each group.',
+      error: 'Not enough eligible readers to have at least 2 in each group.',
       readers: {
         table: tableReaders.readers,
         lounge: { scheduled: [], bonus: [] },
+      },
+      upNext: {
+        table: getPendingOrAlphabeticalNext(table),
+        lounge: null,
       },
     }
   }
@@ -198,15 +246,11 @@ export function makeGroups(
   const remaining = shuffle([...remainingReaders, ...shuffledNonReaders])
 
   // Balance group sizes
-  for (const participants of remaining) {
-    if (lounge.length <= table.length) {
-      lounge.push(participants)
-    } else {
-      table.push(participants)
-    }
+  for (const p of remaining) {
+    if (lounge.length <= table.length) lounge.push(p)
+    else table.push(p)
   }
 
-  // Now assign readers within each group (B: 4 scheduled + 2 bonus per group)
   const tableReaders = assignReadersForGroup(table, tableStartIndex, 4, 2)
   const loungeReaders = assignReadersForGroup(lounge, loungeStartIndex, 4, 2)
 
@@ -216,6 +260,10 @@ export function makeGroups(
     readers: {
       table: tableReaders.readers,
       lounge: loungeReaders.readers,
+    },
+    upNext: {
+      table: getPendingOrAlphabeticalNext(table),
+      lounge: getPendingOrAlphabeticalNext(lounge),
     },
   }
 }
