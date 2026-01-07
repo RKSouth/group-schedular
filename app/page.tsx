@@ -6,6 +6,8 @@ import { makeGroups } from '../lib/grouping'
 type Participant = {
   id: number
   name: string
+  email: string | null
+  phone_number: string | null
   has_reading: boolean
   created_at?: string
 }
