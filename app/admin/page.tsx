@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-
+import { makeGroups } from '../../lib/grouping'
 
 type Participant = {
   phone_number: string
@@ -20,6 +20,7 @@ export default function Page() {
   const [phoneNumber, setPhoneNumber] = useState('')
   const [hasReading, setHasReading] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const groups = makeGroups(participants)
 
 
 
@@ -99,21 +100,6 @@ async function updateHasReading(id: number, value: boolean) {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ hasReading: value }),
-  })
-  if (!res.ok) {
-    console.error('Failed to update participant')
-    return
-  }
-  
-
-  // Reload from DB
-  await loadParticipants()
-}
-async function updateEmail(id: number, value: string) {
-  const res = await fetch(`/api/participants/${id}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: value }),
   })
   if (!res.ok) {
     console.error('Failed to update participant')
@@ -234,6 +220,87 @@ return (
 )}
 
       </div>
+    </div>
+    <div className="flex flex-col sm:flex-row gap-4 items-stretch p-4 rounded-md -4">
+      <div className="flex-1 flex flex-col p-4 bg-white/80 rounded-md">
+  <h2 className="text-xl font-bold mb-3">Reader Schedule</h2>
+
+  {/* ERROR */}
+  {groups.error && (
+    <p className="text-red-600 mb-3">{groups.error}</p>
+  )}
+
+  {/* TABLE */}
+  <div className="mb-4">
+    <h3 className="text-lg font-semibold">Table</h3>
+
+    <div className="mt-2">
+      <div className="font-medium">Scheduled</div>
+      {groups.readers.table.scheduled.length === 0 ? (
+        <div className="text-sm text-gray-600">No scheduled readers.</div>
+      ) : (
+        <ul className="list-disc ml-5">
+          {groups.readers.table.scheduled.map(participants => (
+            <li key={participants.id}>
+              {participants.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+
+    <div className="mt-2">
+      <div className="font-medium">Bonus</div>
+      {groups.readers.table.bonus.length === 0 ? (
+        <div className="text-sm text-gray-600">No bonus readers.</div>
+      ) : (
+        <ul className="list-disc ml-5">
+          {groups.readers.table.bonus.map(participants => (
+            <li key={participants.id}>
+              {participants.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  </div>
+
+  {/* LOUNGE */}
+  <div>
+    <h3 className="text-lg font-semibold">Lounge</h3>
+
+    <div className="mt-2">
+      <div className="font-medium">Scheduled</div>
+      {groups.readers.lounge.scheduled.length === 0 ? (
+        <div className="text-sm text-gray-600">No scheduled readers.</div>
+      ) : (
+        <ul className="list-disc ml-5">
+          {groups.readers.lounge.scheduled.map(participants => (
+            <li key={participants.id}>
+              {participants.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+
+    <div className="mt-2">
+      <div className="font-medium">Bonus</div>
+      {groups.readers.lounge.bonus.length === 0 ? (
+        <div className="text-sm text-gray-600">No bonus readers.</div>
+      ) : (
+        <ul className="list-disc ml-5">
+          {groups.readers.lounge.bonus.map(participants => (
+            <li key={participants.id}>
+              {participants.name}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  </div>
+</div>
+
     </div>
   </main>
 )
