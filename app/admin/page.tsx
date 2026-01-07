@@ -1,12 +1,12 @@
 'use client'
 
-import { ReactNode, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 
 type Participant = {
-  phone_number: ReactNode
-  phoneNumber: ReactNode
-  email: ReactNode
+  phone_number: string
+  phoneNumber: string
+  email: string
   id: number
   name: string
   has_reading: boolean
