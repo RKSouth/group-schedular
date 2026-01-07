@@ -237,6 +237,8 @@ return (
                     />{' '}
                     has reading
                   </label>{' '}
+                      <h4>{p.email}</h4>
+                      <h4>{p.phoneNumber}</h4>
                   <button className="ml-2 px-2 bg-white text-black rounded-md" onClick={() => deleteParticipant(p.id)}>
                     Delete
                   </button>

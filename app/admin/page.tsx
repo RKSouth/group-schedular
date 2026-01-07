@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 
 
 type Participant = {
+  phone_number: ReactNode
+  phoneNumber: ReactNode
+  email: ReactNode
   id: number
   name: string
   has_reading: boolean
@@ -97,11 +100,26 @@ async function updateHasReading(id: number, value: boolean) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ hasReading: value }),
   })
-
   if (!res.ok) {
     console.error('Failed to update participant')
     return
   }
+  
+
+  // Reload from DB
+  await loadParticipants()
+}
+async function updateEmail(id: number, value: string) {
+  const res = await fetch(`/api/participants/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: value }),
+  })
+  if (!res.ok) {
+    console.error('Failed to update participant')
+    return
+  }
+  
 
   // Reload from DB
   await loadParticipants()
@@ -169,42 +187,54 @@ return (
           </button>
         </div>
   <hr className="my-1" />
-        <h3 className='font-semibold text-md mb-2'>All participants ({participants.length})</h3>
-        {participants.length === 0 ? (
-          <p>No one yet.</p>
-        ) : (
-          <ul>
-            {participants.map(p => (
-              <li key={p.id}>
-                <strong>{p.name}</strong>{' '}
-                {p.has_reading ? '(reader)' : ''}{' '}
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={p.has_reading}
-                    onChange={e =>
-                      updateHasReading(p.id, e.target.checked)
-                    }
-                  />{' '}
-                  has reading
-                </label>{' '}
-                <button 
-                  className="ml-2 px-2 bg-white text-black rounded-md"
-                  onClick={() => deleteParticipant(p.id)}>
-                  Delete
-                </button>
-                  <button 
-                  className="ml-2 px-2 bg-white text-black rounded-md"
-                  onClick={() => deleteParticipant(p.id)}>
-                  Update
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        <h3 className='font-semibold text-lg mb-2'>All participants ({participants.length})</h3>
+       {participants.length === 0 ? (
+  <p>No one yet.</p>
+) : (
+  <ul className="flex flex-col gap-2">
+    {participants.map(p => (
+      <li
+        key={p.id}
+        className="flex items-center gap-4 rounded-md p-3 text-sm"
+      >
+        <span className="font-semibold">
+          {p.name}
+        </span>
+
+        <span>
+          {p.has_reading ? '(reader)' : 'not reading'}
+        </span>
+
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={p.has_reading}
+            onChange={e => updateHasReading(p.id, e.target.checked)}
+          />
+          pages
+        </label>
+
+        <span className="text-gray-700">
+          {p.email ?? '—'}
+        </span>
+
+        <span className="text-gray-700">
+          {p.phone_number ?? '—'}
+        </span>
+
+        <button
+          className="ml-auto rounded-md bg-white px-2 py-1 text-black"
+          onClick={() => deleteParticipant(p.id)}
+        >
+          Delete
+        </button>
+      </li>
+    ))}
+  </ul>
+)}
+
       </div>
     </div>
   </main>
 )
-
 }
