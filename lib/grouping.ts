@@ -1,6 +1,13 @@
 // lib/grouping.ts
 
 export type AttendanceStatus = 'unknown' | 'yes' | 'no' | 'maybe'
+
+// IMPORTANT: We are re-interpreting these weekly values:
+//
+// - unassigned: hasn't answered about pages this week (still in rotation)
+// - pending: currently "up next" / being asked (still in rotation)
+// - confirmed: YES, I have pages this week (counts as locked in)
+// - deferred: NO, I do NOT have pages this week (skip them for scheduling this week)
 export type ReadingStatus = 'unassigned' | 'pending' | 'confirmed' | 'deferred'
 
 export type Participant = {
@@ -8,15 +15,13 @@ export type Participant = {
   name: string
   email: string | null
   phone_number: string | null
-
-  // If you have both of these in your codebase, keep them;
-  // but you should pick ONE eventually.
   phoneNumber?: string | null
 
-  // "Eligible to read at all" (master preference)
+  // Keep this if your master list uses it, but we do NOT use it
+  // to decide "who is up next" anymore.
   has_reading: boolean
 
-  // Weekly / cycle state (optional so old callers still work)
+  // weekly / cycle state (optional so old callers still work)
   attendance?: AttendanceStatus
   reading?: ReadingStatus
   responded_at?: string | null
@@ -37,17 +42,12 @@ export type GroupResult = {
     lounge: GroupReaders
   }
 
-  // Who is currently "up next" (pending) or would be next (alphabetical) if none pending
   upNext?: {
     table: Participant | null
     lounge: Participant | null
   }
 }
 
-/**
- * Rotation state: you need to store these somewhere (DB) between weeks.
- * If you don't yet, pass 0/0 and it'll still work (just won't truly rotate).
- */
 export type RotationState = {
   tableStartIndex: number
   loungeStartIndex: number
@@ -71,7 +71,6 @@ function getFirstName(name: string): string {
 function sortByFirstName(a: Participant, b: Participant): number {
   const aFirst = getFirstName(a.name).toLowerCase()
   const bFirst = getFirstName(b.name).toLowerCase()
-
   if (aFirst < bFirst) return -1
   if (aFirst > bFirst) return 1
 
@@ -83,43 +82,42 @@ function sortByFirstName(a: Participant, b: Participant): number {
   return a.id - b.id
 }
 
-/**
- * Seating rule:
- * - If attendance is missing, treat as "unknown" and include.
- * - Exclude ONLY if explicitly "no".
- */
 function isAttending(p: Participant): boolean {
+  // seated unless explicitly "no"
   return (p.attendance ?? 'unknown') !== 'no'
 }
 
-/**
- * Reader eligibility THIS cycle (separate from seating):
- * - must be attending (in the room)
- * - must have pages (has_reading true)
- * - must be unassigned this cycle
- */
-function isEligibleToBePickedThisCycle(p: Participant): boolean {
-  if (!isAttending(p)) return false
-  if (!p.has_reading) return false
-
-  const status = p.reading ?? 'unassigned'
-  if (status === 'deferred') return false
-  if (status === 'confirmed') return false
-  if (status === 'pending') return false
-
-  return true // unassigned
+function readingStatus(p: Participant): ReadingStatus {
+  return (p.reading ?? 'unassigned') as ReadingStatus
 }
 
-function getPendingOrAlphabeticalNext(groupMembers: Participant[]): Participant | null {
-  // If someone is already pending in this group, they are "up next"
-  const pending = groupMembers.find(
-    p => (p.reading ?? 'unassigned') === 'pending' && isAttending(p) && p.has_reading
-  )
+/**
+ * Scheduling eligibility THIS WEEK:
+ * - must be attending
+ * - skip ONLY if they explicitly have "no pages this week" (deferred)
+ *
+ * Everyone else stays in rotation even if they haven't confirmed yet.
+ */
+function isSchedulableThisWeek(p: Participant): boolean {
+  if (!isAttending(p)) return false
+  return readingStatus(p) !== 'deferred'
+}
+
+/**
+ * "Up next" logic:
+ * 1) If someone is already pending in this group (and attending), they are up next.
+ * 2) Else pick the next person in alphabetical rotation who is schedulable this week
+ *    and is not already confirmed.
+ */
+function getUpNext(groupMembers: Participant[]): Participant | null {
+  const attendingMembers = groupMembers.filter(isAttending)
+
+  const pending = attendingMembers.find(p => readingStatus(p) === 'pending')
   if (pending) return pending
 
-  // Otherwise, choose alphabetical next eligible
-  const next = groupMembers
-    .filter(isEligibleToBePickedThisCycle)
+  const next = attendingMembers
+    .filter(isSchedulableThisWeek)
+    .filter(p => readingStatus(p) !== 'confirmed') // already locked-in this week
     .slice()
     .sort(sortByFirstName)[0]
 
@@ -132,28 +130,43 @@ function assignReadersForGroup(
   scheduledQuota = 4,
   bonusQuota = 2
 ): { readers: GroupReaders; nextStartIndex: number } {
-  // eligible readers in this group, alphabetical by first name
-  const eligible = groupMembers
-    .filter(isEligibleToBePickedThisCycle)
+  // Rotation roster for this group: attending people, alphabetical
+  // Skip only "deferred" (no pages this week)
+  const roster = groupMembers
+    .filter(isSchedulableThisWeek)
     .slice()
     .sort(sortByFirstName)
 
+  // Put confirmed people first in the scheduled list (they already said "yes, I have pages")
+  const confirmed = roster.filter(p => readingStatus(p) === 'confirmed')
+  const notConfirmed = roster.filter(p => readingStatus(p) !== 'confirmed')
+
+  // To fill remaining scheduled spots, rotate through notConfirmed from startIndex
   const scheduled: Participant[] = []
   const bonus: Participant[] = []
 
-  const n = eligible.length
+  // 1) confirmed go into scheduled first (up to quota)
+  for (const p of confirmed) {
+    if (scheduled.length >= scheduledQuota) break
+    scheduled.push(p)
+  }
+
+  const n = notConfirmed.length
   if (n === 0) {
-    return { readers: { scheduled, bonus }, nextStartIndex: 0 }
+    // All schedulable people (if any) were confirmed; or roster empty.
+    return {
+      readers: { scheduled, bonus },
+      nextStartIndex: 0,
+    }
   }
 
   let i = ((startIndex % n) + n) % n
-  const picked = new Set<number>()
+  const picked = new Set<number>(scheduled.map(p => p.id))
 
-  function takeNext(): Participant | null {
+  function takeNextNotConfirmed(): Participant | null {
     for (let scan = 0; scan < n; scan++) {
-      const p = eligible[i]
+      const p = notConfirmed[i]
       i = (i + 1) % n
-
       if (picked.has(p.id)) continue
       picked.add(p.id)
       return p
@@ -161,23 +174,26 @@ function assignReadersForGroup(
     return null
   }
 
+  // 2) Fill remaining scheduled slots
   while (scheduled.length < scheduledQuota) {
-    const p = takeNext()
+    const p = takeNextNotConfirmed()
     if (!p) break
     scheduled.push(p)
   }
 
+  // 3) Fill bonus slots
   while (bonus.length < bonusQuota) {
-    const p = takeNext()
+    const p = takeNextNotConfirmed()
     if (!p) break
     bonus.push(p)
   }
 
-  // Next week start AFTER the last scheduled reader
+  // Next week start AFTER the last *non-confirmed* person we scheduled from rotation.
+  // (If we only scheduled confirmed people, we keep the same startIndex.)
   let nextStartIndex = startIndex
-  const lastScheduled = scheduled[scheduled.length - 1]
-  if (lastScheduled) {
-    const lastIdx = eligible.findIndex(p => p.id === lastScheduled.id)
+  const lastFromRotation = [...scheduled].reverse().find(p => readingStatus(p) !== 'confirmed')
+  if (lastFromRotation) {
+    const lastIdx = notConfirmed.findIndex(p => p.id === lastFromRotation.id)
     nextStartIndex = lastIdx === -1 ? startIndex : (lastIdx + 1) % n
   }
 
@@ -186,19 +202,15 @@ function assignReadersForGroup(
 
 /**
  * makeGroups:
- * - Seating is based ONLY on attendance.
- * - Reading assignment is separate and uses has_reading + reading status.
+ * - Seating: ALL attending participants get seated (regardless of pages).
+ * - Reader schedule: rotates through attending alphabetically, skipping only deferred.
  */
-export function makeGroups(
-  participants: Participant[],
-  rotation?: RotationState
-): GroupResult {
+export function makeGroups(participants: Participant[], rotation?: RotationState): GroupResult {
+  const seated = participants.filter(isAttending)
+  const total = seated.length
+
   const tableStartIndex = rotation?.tableStartIndex ?? 0
   const loungeStartIndex = rotation?.loungeStartIndex ?? 0
-
-  // ✅ Seat only attending people (pages flag does NOT affect seating)
-  const attending = participants.filter(isAttending)
-  const total = attending.length
 
   if (total === 0) {
     return {
@@ -215,7 +227,7 @@ export function makeGroups(
 
   // <=8: everyone at the table
   if (total <= 8) {
-    const table = shuffle(attending)
+    const table = shuffle(seated)
     const tableReaders = assignReadersForGroup(table, tableStartIndex, 4, 2)
 
     return {
@@ -226,14 +238,14 @@ export function makeGroups(
         lounge: { scheduled: [], bonus: [] },
       },
       upNext: {
-        table: getPendingOrAlphabeticalNext(table),
+        table: getUpNext(table),
         lounge: null,
       },
     }
   }
 
-  // >8: split attending into 2 groups (balanced)
-  const shuffled = shuffle(attending)
+  // >8: split into 2 groups (pure seating; pages does not affect seating)
+  const shuffled = shuffle(seated)
   const lounge: Participant[] = []
   const table: Participant[] = []
 
@@ -242,28 +254,19 @@ export function makeGroups(
     else table.push(p)
   }
 
-  // Readers assigned AFTER seating (separate concern)
   const tableReaders = assignReadersForGroup(table, tableStartIndex, 4, 2)
   const loungeReaders = assignReadersForGroup(lounge, loungeStartIndex, 4, 2)
-
-  // Optional helpful error if nobody can be selected
-  const eligibleCount = attending.filter(isEligibleToBePickedThisCycle).length
-  const error =
-    eligibleCount === 0
-      ? 'No eligible readers (must be attending + have pages + unassigned).'
-      : undefined
 
   return {
     table,
     lounge,
-    error,
     readers: {
       table: tableReaders.readers,
       lounge: loungeReaders.readers,
     },
     upNext: {
-      table: getPendingOrAlphabeticalNext(table),
-      lounge: getPendingOrAlphabeticalNext(lounge),
+      table: getUpNext(table),
+      lounge: getUpNext(lounge),
     },
   }
 }

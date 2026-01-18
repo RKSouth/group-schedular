@@ -21,7 +21,7 @@ type CycleParticipant = {
   reading: ReadingStatus
   responded_at: string | null
 
-  // participant fields flattened by your API
+  // participant fields flattened by your /api/cycles/[cycleId]/participants route
   id: number
   name: string
   email: string | null
@@ -30,8 +30,63 @@ type CycleParticipant = {
   created_at?: string
 }
 
-function isAttending(p: CycleParticipant) {
-  return (p.attendance ?? 'unknown') !== 'no'
+function labelAttendance(a: AttendanceStatus | undefined) {
+  switch (a ?? 'unknown') {
+    case 'yes':
+      return { text: 'Attending', tone: 'good' as const }
+    case 'no':
+      return { text: 'Not attending', tone: 'bad' as const }
+    case 'maybe':
+      return { text: 'Maybe', tone: 'warn' as const }
+    case 'unknown':
+    default:
+      return { text: 'RSVP needed', tone: 'neutral' as const }
+  }
+}
+
+function labelReading(r: ReadingStatus | undefined) {
+  switch (r ?? 'unassigned') {
+    case 'pending':
+      return { text: 'Up next', tone: 'warn' as const }
+    case 'confirmed':
+      return { text: 'Confirmed', tone: 'good' as const }
+    case 'deferred':
+      return { text: 'Deferred', tone: 'neutral' as const }
+    case 'unassigned':
+    default:
+      return { text: 'Not scheduled', tone: 'neutral' as const }
+  }
+}
+
+function Badge({
+  text,
+  tone = 'neutral',
+}: {
+  text: string
+  tone?: 'neutral' | 'good' | 'warn' | 'bad'
+}) {
+  const toneClass =
+    tone === 'good'
+      ? 'bg-green-100 text-green-800 border-green-200'
+      : tone === 'warn'
+      ? 'bg-amber-100 text-amber-900 border-amber-200'
+      : tone === 'bad'
+      ? 'bg-red-100 text-red-800 border-red-200'
+      : 'bg-gray-100 text-gray-800 border-gray-200'
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${toneClass}`}
+    >
+      {text}
+    </span>
+  )
+}
+
+function formatPhone(phone: string | null | undefined) {
+  if (!phone) return '—'
+  // keep simple; you can fancy-format later
+  return phone
 }
 
 export default function Page() {
@@ -48,17 +103,14 @@ export default function Page() {
   const [cycleParticipants, setCycleParticipants] = useState<CycleParticipant[]>([])
   const [cycleError, setCycleError] = useState<string | null>(null)
 
-  // Groups from weekly roster
   const groups = useMemo(() => makeGroups(cycleParticipants), [cycleParticipants])
 
-  const attendingCount = useMemo(
-    () => cycleParticipants.filter(isAttending).length,
-    [cycleParticipants]
-  )
+  const attendingCount = useMemo(() => {
+    return cycleParticipants.filter(p => (p.attendance ?? 'unknown') !== 'no').length
+  }, [cycleParticipants])
 
   // ---------
   // CRUD: master participants
-
   async function loadParticipants() {
     try {
       const res = await fetch('/api/participants')
@@ -92,7 +144,8 @@ export default function Page() {
       })
 
       if (!res.ok) {
-        console.error('Failed to add participant')
+        const text = await res.text()
+        console.error('Failed to add participant:', text)
         return
       }
 
@@ -101,6 +154,7 @@ export default function Page() {
       setPhoneNumber('')
       setHasReading(false)
 
+      // Reload master list AND re-sync cycle roster
       await loadParticipants()
       await loadCycleRoster()
     } catch (err) {
@@ -128,7 +182,8 @@ export default function Page() {
       body: JSON.stringify({ hasReading: value }),
     })
     if (!res.ok) {
-      console.error('Failed to update participant')
+      const text = await res.text()
+      console.error('Failed to update participant:', text)
       return
     }
     await loadParticipants()
@@ -137,7 +192,6 @@ export default function Page() {
 
   // ---------
   // Weekly cycle roster
-
   async function loadCycleRoster() {
     try {
       setCycleError(null)
@@ -151,15 +205,19 @@ export default function Page() {
       const cycle = (await cycleRes.json()) as { id: string }
       setCycleId(cycle.id)
 
-      // 2) ensure roster rows exist (join table)
+      // 2) ensure roster rows exist
       const syncRes = await fetch(`/api/cycles/${cycle.id}/sync`, { method: 'POST' })
       if (!syncRes.ok) {
-        console.error('Failed to sync cycle roster')
+        const text = await syncRes.text()
+        console.error('Failed to sync cycle roster:', text)
+        // proceed anyway
       }
 
-      // 3) load roster (cycle participants flattened)
+      // 3) load roster
       const rosterRes = await fetch(`/api/cycles/${cycle.id}/participants`)
       if (!rosterRes.ok) {
+        const text = await rosterRes.text()
+        console.error('Failed to load cycle roster:', text)
         setCycleError('Failed to load cycle roster')
         return
       }
@@ -199,111 +257,111 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
-      <a
-        href="/admin/logout"
-        className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1"
-      >
+      <a href="/admin/logout" className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1">
         Logout
       </a>
 
-      <h1 className="absolute-bottom pt-10 text-gray-900 text-[3rem] bold flex items-center justify-center mb-4 mr-20text-xl mx-4">
+      <h1 className="pt-10 text-gray-900 text-[3rem] font-bold flex items-center justify-center mb-4 mx-4">
         Administrator Page
       </h1>
 
-      <div className="flex flex-col sm:flex-row gap-4 items-stretch p-4 rounded-md -4">
-        {/* LEFT: Folks (CRUD) */}
+      {/* LEFT: Folks (leave mostly the same, just tiny cleanup) */}
+      <div className="flex flex-col sm:flex-row gap-4 items-stretch p-4">
         <div className="flex-1 flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
           <h2 className="font-bold text-black text-xl mb-2">Folks</h2>
-          <h4>Instructions: Here is where you can add, update or delete participants.</h4>
+          <p className="text-sm text-black/80 mb-3">
+            Add, update, or delete participants (master list).
+          </p>
 
-          <div style={{ marginBottom: 12 }}>
+          <div className="mb-3">
             <div className="mb-2">
-              <div className="mb-2">
-                <label htmlFor="name" className="font-medium text-black">
-                  Name:
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  placeholder="Enter your name"
-                  onChange={e => setName(e.target.value)}
-                  className="ml-2 px-2 bg-white text-black rounded-md"
-                />
-              </div>
-
-              <div className="mb-2">
-                <label htmlFor="email" className="font-medium text-black">
-                  Email:
-                </label>
-                <input
-                  type="text"
-                  value={email}
-                  placeholder="Enter your email"
-                  onChange={e => setEmail(e.target.value)}
-                  className="ml-2 px-2 bg-white text-black rounded-md"
-                />
-              </div>
-
-              <div className="mb-2">
-                <label htmlFor="phoneNumber" className="font-medium text-black">
-                  Cell:
-                </label>
-                <input
-                  type="text"
-                  value={phoneNumber}
-                  placeholder="1234567890"
-                  onChange={e => setPhoneNumber(e.target.value)}
-                  className="ml-2 px-2 bg-white text-black rounded-md"
-                />
-              </div>
+              <label htmlFor="name" className="font-medium text-black">
+                Name:
+              </label>
+              <input
+                id="name"
+                type="text"
+                value={name}
+                placeholder="Enter name"
+                onChange={e => setName(e.target.value)}
+                className="ml-2 px-2 bg-white text-black rounded-md"
+              />
             </div>
 
-            <label style={{ display: 'block', marginBottom: 8 }}>
+            <div className="mb-2">
+              <label htmlFor="email" className="font-medium text-black">
+                Email:
+              </label>
+              <input
+                id="email"
+                type="text"
+                value={email}
+                placeholder="Enter email"
+                onChange={e => setEmail(e.target.value)}
+                className="ml-2 px-2 bg-white text-black rounded-md"
+              />
+            </div>
+
+            <div className="mb-2">
+              <label htmlFor="cell" className="font-medium text-black">
+                Cell:
+              </label>
+              <input
+                id="cell"
+                type="text"
+                value={phoneNumber}
+                placeholder="1234567890"
+                onChange={e => setPhoneNumber(e.target.value)}
+                className="ml-2 px-2 bg-white text-black rounded-md"
+              />
+            </div>
+
+            <label className="block mb-2 text-black">
               <input
                 type="checkbox"
                 checked={hasReading}
                 onChange={e => setHasReading(e.target.checked)}
-                className="ml-2 px-2 bg-white text-black rounded-md"
-              />{' '}
-              Pages
+                className="mr-2"
+              />
+              Pages (eligible to read)
             </label>
 
             <button
-              className="ml-2 px-2 bg-white text-black rounded-md"
+              className="rounded-md bg-white px-3 py-1 text-black"
               onClick={handleAdd}
-              disabled={isLoading || !name.trim()}
+              disabled={isLoading || !name.trim() || !email.trim() || !phoneNumber.trim()}
             >
               {isLoading ? 'Adding…' : 'Add'}
             </button>
           </div>
 
-          <hr className="my-1" />
+          <hr className="my-2 border-black/20" />
 
-          <h3 className="font-semibold text-lg mb-2">
+          <h3 className="font-semibold text-lg mb-2 text-white">
             All participants ({participants.length})
           </h3>
 
           {participants.length === 0 ? (
-            <p>No one yet.</p>
+            <p className="text-white/90">No one yet.</p>
           ) : (
             <ul className="flex flex-col gap-2">
               {participants.map(p => (
-                <li key={p.id} className="flex items-center gap-4 rounded-md p-3 text-sm">
-                  <span className="font-semibold">{p.name}</span>
+                <li key={p.id} className="flex items-center gap-3 rounded-md p-3 text-sm bg-white/10">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold">{p.name}</div>
+                    <div className="text-xs text-white/80">
+                      {p.email ?? '—'} • {formatPhone(p.phone_number)}
+                    </div>
+                  </div>
 
-                  <span>{p.has_reading ? '(pages)' : 'no pages'}</span>
-
-                  <label className="flex items-center gap-2">
+                  <label className="flex items-center gap-2 text-xs">
                     <input
                       type="checkbox"
                       checked={p.has_reading}
                       onChange={e => updateHasReading(p.id, e.target.checked)}
                     />
-                    pages
+                    Pages
                   </label>
-
-                  <span className="text-gray-700">{p.email ?? '—'}</span>
-                  <span className="text-gray-700">{p.phone_number ?? '—'}</span>
 
                   <button
                     className="ml-auto rounded-md bg-white px-2 py-1 text-black"
@@ -317,239 +375,346 @@ export default function Page() {
           )}
         </div>
 
-        {/* RIGHT: Weekly seating + schedule */}
-<div className="flex-1 flex flex-col gap-4 p-4 bg-white/80 rounded-xl shadow-sm border border-black/5">
-  <div className="flex items-start justify-between gap-4">
-    <div>
-      <h2 className="text-2xl font-semibold text-gray-900">This Week</h2>
-      {cycleId && (
-        <div className="text-xs text-gray-600 mt-1">
-          Cycle: <span className="font-mono">{cycleId}</span>
-        </div>
-      )}
-    </div>
-
-    <div className="text-sm text-gray-700 bg-white rounded-lg px-3 py-2 border border-black/5 shadow-sm">
-      Attending: <span className="font-semibold">{attendingCount}</span> / {cycleParticipants.length}
-    </div>
-  </div>
-
-  {(cycleError || groups.error) && (
-    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-      {cycleError ?? groups.error}
-    </div>
-  )}
-
-  {/* Seating */}
-  <div className="bg-white rounded-xl border border-black/5 shadow-sm p-4">
-    <div className="flex items-center justify-between mb-3">
-      <h3 className="text-lg font-semibold text-gray-900">Seating</h3>
-      <div className="text-xs text-gray-500">Non-attendees are excluded</div>
-    </div>
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {/* Table */}
-      <div className="rounded-lg border border-black/5 p-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="font-medium text-gray-900">Table</div>
-          <div className="text-xs text-gray-600">{groups.table.length} people</div>
-        </div>
-
-        {groups.table.length === 0 ? (
-          <div className="text-sm text-gray-600">No one at the table.</div>
-        ) : (
-          <ul className="space-y-2">
-            {groups.table.map(p => (
-              <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2">
-                <div className="min-w-0">
-                  <div className="font-medium text-gray-900 truncate">{p.name}</div>
-                  <div className="text-xs text-gray-500 truncate">
-                    {p.email ?? '—'} • {p.phone_number ?? '—'}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-1">
-                  <span className="text-xs rounded-full bg-white border border-black/10 px-2 py-0.5 text-gray-700">
-                    {p.attendance ?? 'unknown'}
-                  </span>
-                  <span
-                    className={`text-xs rounded-full border px-2 py-0.5 ${
-                      p.has_reading
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                        : 'bg-gray-100 border-black/10 text-gray-700'
-                    }`}
-                  >
-                    {p.has_reading ? 'pages' : 'no pages'}
-                  </span>
-                  <span className="text-xs rounded-full bg-white border border-black/10 px-2 py-0.5 text-gray-700">
-                    {p.reading ?? 'unassigned'}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Lounge */}
-      <div className="rounded-lg border border-black/5 p-3">
-        <div className="flex items-center justify-between mb-2">
-          <div className="font-medium text-gray-900">Lounge</div>
-          <div className="text-xs text-gray-600">{groups.lounge.length} people</div>
-        </div>
-
-        {groups.lounge.length === 0 ? (
-          <div className="text-sm text-gray-600">No one in the lounge.</div>
-        ) : (
-          <ul className="space-y-2">
-            {groups.lounge.map(p => (
-              <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2">
-                <div className="min-w-0">
-                  <div className="font-medium text-gray-900 truncate">{p.name}</div>
-                  <div className="text-xs text-gray-500 truncate">
-                    {p.email ?? '—'} • {p.phone_number ?? '—'}
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-end gap-1">
-                  <span className="text-xs rounded-full bg-white border border-black/10 px-2 py-0.5 text-gray-700">
-                    {p.attendance ?? 'unknown'}
-                  </span>
-                  <span
-                    className={`text-xs rounded-full border px-2 py-0.5 ${
-                      p.has_reading
-                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                        : 'bg-gray-100 border-black/10 text-gray-700'
-                    }`}
-                  >
-                    {p.has_reading ? 'pages' : 'no pages'}
-                  </span>
-                  <span className="text-xs rounded-full bg-white border border-black/10 px-2 py-0.5 text-gray-700">
-                    {p.reading ?? 'unassigned'}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  </div>
-
-  {/* Up Next */}
-  <div className="bg-white rounded-xl border border-black/5 shadow-sm p-4">
-    <h3 className="text-lg font-semibold text-gray-900 mb-3">Up Next</h3>
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      {(['table', 'lounge'] as const).map(side => {
-        const person = groups.upNext?.[side] ?? null
-        return (
-          <div key={side} className="rounded-lg border border-black/5 p-3">
-            <div className="font-medium text-gray-900 mb-2">
-              {side === 'table' ? 'Table' : 'Lounge'}
+        {/* RIGHT: This Week */}
+        <div className="flex-1 flex flex-col p-4 bg-white/85 rounded-md">
+          <div className="mb-3">
+            <h2 className="text-2xl font-bold text-gray-900">This Week</h2>
+            {cycleId && <div className="text-xs text-gray-600">Cycle: {cycleId}</div>}
+            <div className="text-sm text-gray-700 mt-1">
+              Attending: <span className="font-semibold">{attendingCount}</span> / {cycleParticipants.length}{' '}
+              <span className="text-xs text-gray-500">(Anyone not marked “Not attending” is seated.)</span>
             </div>
+          </div>
 
-            {!person ? (
-              <div className="text-sm text-gray-600">No one up next.</div>
-            ) : (
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-medium text-gray-900 truncate">{person.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {person.has_reading ? 'pages' : 'no pages'} • {person.reading ?? 'unassigned'}
-                  </div>
+          {cycleError && <p className="text-red-600 mb-3">{cycleError}</p>}
+          {groups.error && <p className="text-red-600 mb-3">{groups.error}</p>}
+
+          {/* Seating */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Seating</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* TABLE */}
+              <div className="rounded-xl border bg-white p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-semibold text-gray-900">Table</div>
+                  <div className="text-xs text-gray-600">{groups.table.length} people</div>
                 </div>
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    className="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-sm hover:bg-gray-800"
-                    onClick={() => patchCycleParticipant(person.id, { reading: 'confirmed' })}
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    className="rounded-lg bg-white border border-black/10 text-gray-900 px-3 py-1.5 text-sm hover:bg-gray-50"
-                    onClick={() => patchCycleParticipant(person.id, { reading: 'deferred' })}
-                  >
-                    Defer
-                  </button>
+                {groups.table.length === 0 ? (
+                  <div className="text-sm text-gray-600">No one at the table.</div>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {groups.table.map(p => {
+                      const a = labelAttendance(p.attendance)
+                      const pages = p.has_reading
+                        ? { text: 'Has pages', tone: 'good' as const }
+                        : { text: 'No pages', tone: 'neutral' as const }
+                      const r = labelReading(p.reading)
+
+                      return (
+                        <li key={p.id} className="rounded-lg border bg-white p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="font-semibold text-gray-900">{p.name}</div>
+                              <div className="text-xs text-gray-500">
+                                {p.email ?? '—'} • {formatPhone(p.phone_number)}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <Badge text={a.text} tone={a.tone} />
+                                <Badge text={pages.text} tone={pages.tone} />
+                              </div>
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <Badge text={r.text} tone={r.tone} />
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* RSVP controls (optional but makes "unknown" go away fast) */}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              className="rounded-md border bg-white px-2 py-1 text-xs"
+                              onClick={() => patchCycleParticipant(p.id, { attendance: 'yes' })}
+                            >
+                              Mark attending
+                            </button>
+                            <button
+                              className="rounded-md border bg-white px-2 py-1 text-xs"
+                              onClick={() => patchCycleParticipant(p.id, { attendance: 'maybe' })}
+                            >
+                              Mark maybe
+                            </button>
+                            <button
+                              className="rounded-md border bg-white px-2 py-1 text-xs"
+                              onClick={() => patchCycleParticipant(p.id, { attendance: 'no' })}
+                            >
+                              Mark not attending
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+
+              {/* LOUNGE */}
+              <div className="rounded-xl border bg-white p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-semibold text-gray-900">Lounge</div>
+                  <div className="text-xs text-gray-600">{groups.lounge.length} people</div>
+                </div>
+
+                {groups.lounge.length === 0 ? (
+                  <div className="text-sm text-gray-600">No one in the lounge.</div>
+                ) : (
+                  <ul className="flex flex-col gap-2">
+                    {groups.lounge.map(p => {
+                      const a = labelAttendance(p.attendance)
+                      const pages = p.has_reading
+                        ? { text: 'Has pages', tone: 'good' as const }
+                        : { text: 'No pages', tone: 'neutral' as const }
+                      const r = labelReading(p.reading)
+
+                      return (
+                        <li key={p.id} className="rounded-lg border bg-white p-3">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="font-semibold text-gray-900">{p.name}</div>
+                              <div className="text-xs text-gray-500">
+                                {p.email ?? '—'} • {formatPhone(p.phone_number)}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <Badge text={a.text} tone={a.tone} />
+                                <Badge text={pages.text} tone={pages.tone} />
+                              </div>
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <Badge text={r.text} tone={r.tone} />
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              className="rounded-md border bg-white px-2 py-1 text-xs"
+                              onClick={() => patchCycleParticipant(p.id, { attendance: 'yes' })}
+                            >
+                              Mark attending
+                            </button>
+                            <button
+                              className="rounded-md border bg-white px-2 py-1 text-xs"
+                              onClick={() => patchCycleParticipant(p.id, { attendance: 'maybe' })}
+                            >
+                              Mark maybe
+                            </button>
+                            <button
+                              className="rounded-md border bg-white px-2 py-1 text-xs"
+                              onClick={() => patchCycleParticipant(p.id, { attendance: 'no' })}
+                            >
+                              Mark not attending
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Up Next */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Up For Next Week</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-xl border bg-white p-3">
+                <div className="font-semibold text-gray-900 mb-2">Table</div>
+                {groups.upNext?.table ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-900">{groups.upNext.table.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {groups.upNext.table.has_reading ? 'Has pages' : 'No pages'}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="rounded-md bg-gray-900 px-2 py-1 text-xs text-white"
+                        onClick={() =>
+                          patchCycleParticipant(groups.upNext!.table!.id, { reading: 'confirmed' })
+                        }
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        className="rounded-md border bg-white px-2 py-1 text-xs"
+                        onClick={() =>
+                          patchCycleParticipant(groups.upNext!.table!.id, { reading: 'deferred' })
+                        }
+                      >
+                        Defer
+                      </button>
+                      <button
+                        className="rounded-md border bg-white px-2 py-1 text-xs"
+                        onClick={() =>
+                          patchCycleParticipant(groups.upNext!.table!.id, { reading: 'pending' })
+                        }
+                      >
+                        Set pending
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-600">No one up next.</div>
+                )}
+              </div>
+
+              <div className="rounded-xl border bg-white p-3">
+                <div className="font-semibold text-gray-900 mb-2">Lounge</div>
+                {groups.upNext?.lounge ? (
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-medium text-gray-900">{groups.upNext.lounge.name}</div>
+                      <div className="text-xs text-gray-500">
+                        {groups.upNext.lounge.has_reading ? 'Has pages' : 'No pages'}
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        className="rounded-md bg-gray-900 px-2 py-1 text-xs text-white"
+                        onClick={() =>
+                          patchCycleParticipant(groups.upNext!.lounge!.id, { reading: 'confirmed' })
+                        }
+                      >
+                        Confirm
+                      </button>
+                      <button
+                        className="rounded-md border bg-white px-2 py-1 text-xs"
+                        onClick={() =>
+                          patchCycleParticipant(groups.upNext!.lounge!.id, { reading: 'deferred' })
+                        }
+                      >
+                        Defer
+                      </button>
+                      <button
+                        className="rounded-md border bg-white px-2 py-1 text-xs"
+                        onClick={() =>
+                          patchCycleParticipant(groups.upNext!.lounge!.id, { reading: 'pending' })
+                        }
+                      >
+                        Set pending
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-600">No one up next.</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Scheduled / Bonus */}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Reader Schedule</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="rounded-xl border bg-white p-3">
+                <div className="font-semibold text-gray-900 mb-2">Table</div>
+
+                <div className="mb-3">
+                  <div className="text-sm font-medium text-gray-800 mb-1">Scheduled</div>
+                  {groups.readers.table.scheduled.length === 0 ? (
+                    <div className="text-sm text-gray-600">No scheduled readers.</div>
+                  ) : (
+                    <ul className="flex flex-col gap-1">
+                      {groups.readers.table.scheduled.map(p => {
+                        const rs = labelReading(p.reading)
+                        return (
+                          <li key={p.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-900">{p.name}</span>
+                            <Badge text={rs.text} tone={rs.tone} />
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-sm font-medium text-gray-800 mb-1">Bonus</div>
+                  {groups.readers.table.bonus.length === 0 ? (
+                    <div className="text-sm text-gray-600">No bonus readers.</div>
+                  ) : (
+                    <ul className="flex flex-col gap-1">
+                      {groups.readers.table.bonus.map(p => {
+                        const rs = labelReading(p.reading)
+                        return (
+                          <li key={p.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-900">{p.name}</span>
+                            <Badge text={rs.text} tone={rs.tone} />
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
                 </div>
               </div>
-            )}
+
+              <div className="rounded-xl border bg-white p-3">
+                <div className="font-semibold text-gray-900 mb-2">Lounge</div>
+
+                <div className="mb-3">
+                  <div className="text-sm font-medium text-gray-800 mb-1">Scheduled</div>
+                  {groups.readers.lounge.scheduled.length === 0 ? (
+                    <div className="text-sm text-gray-600">No scheduled readers.</div>
+                  ) : (
+                    <ul className="flex flex-col gap-1">
+                      {groups.readers.lounge.scheduled.map(p => {
+                        const rs = labelReading(p.reading)
+                        return (
+                          <li key={p.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-900">{p.name}</span>
+                            <Badge text={rs.text} tone={rs.tone} />
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+
+                <div>
+                  <div className="text-sm font-medium text-gray-800 mb-1">Bonus</div>
+                  {groups.readers.lounge.bonus.length === 0 ? (
+                    <div className="text-sm text-gray-600">No bonus readers.</div>
+                  ) : (
+                    <ul className="flex flex-col gap-1">
+                      {groups.readers.lounge.bonus.map(p => {
+                        const rs = labelReading(p.reading)
+                        return (
+                          <li key={p.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-900">{p.name}</span>
+                            <Badge text={rs.text} tone={rs.tone} />
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-        )
-      })}
-    </div>
-  </div>
 
-  {/* Readers */}
-  <div className="bg-white rounded-xl border border-black/5 shadow-sm p-4">
-    <h3 className="text-lg font-semibold text-gray-900 mb-3">Readers</h3>
-
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div className="rounded-lg border border-black/5 p-3">
-        <div className="font-medium text-gray-900 mb-2">Table</div>
-
-        <div className="text-sm text-gray-700 mb-2">Scheduled</div>
-        {groups.readers.table.scheduled.length === 0 ? (
-          <div className="text-sm text-gray-600">None.</div>
-        ) : (
-          <ul className="space-y-1">
-            {groups.readers.table.scheduled.map(p => (
-              <li key={p.id} className="text-sm text-gray-900">
-                {p.name} <span className="text-xs text-gray-500">({p.reading ?? 'unassigned'})</span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="text-sm text-gray-700 mt-4 mb-2">Bonus</div>
-        {groups.readers.table.bonus.length === 0 ? (
-          <div className="text-sm text-gray-600">None.</div>
-        ) : (
-          <ul className="space-y-1">
-            {groups.readers.table.bonus.map(p => (
-              <li key={p.id} className="text-sm text-gray-900">
-                {p.name} <span className="text-xs text-gray-500">({p.reading ?? 'unassigned'})</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <div className="rounded-lg border border-black/5 p-3">
-        <div className="font-medium text-gray-900 mb-2">Lounge</div>
-
-        <div className="text-sm text-gray-700 mb-2">Scheduled</div>
-        {groups.readers.lounge.scheduled.length === 0 ? (
-          <div className="text-sm text-gray-600">None.</div>
-        ) : (
-          <ul className="space-y-1">
-            {groups.readers.lounge.scheduled.map(p => (
-              <li key={p.id} className="text-sm text-gray-900">
-                {p.name} <span className="text-xs text-gray-500">({p.reading ?? 'unassigned'})</span>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="text-sm text-gray-700 mt-4 mb-2">Bonus</div>
-        {groups.readers.lounge.bonus.length === 0 ? (
-          <div className="text-sm text-gray-600">None.</div>
-        ) : (
-          <ul className="space-y-1">
-            {groups.readers.lounge.bonus.map(p => (
-              <li key={p.id} className="text-sm text-gray-900">
-                {p.name} <span className="text-xs text-gray-500">({p.reading ?? 'unassigned'})</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    </div>
-  </div>
-</div>
-
+          <div className="mt-4 text-xs text-gray-600">
+            Tip: “RSVP needed” just means attendance is still unknown for this cycle.
+          </div>
+        </div>
       </div>
     </main>
   )
