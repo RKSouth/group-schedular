@@ -30,6 +30,10 @@ type CycleParticipant = {
   created_at?: string
 }
 
+function isAttending(p: CycleParticipant) {
+  return (p.attendance ?? 'unknown') !== 'no'
+}
+
 export default function Page() {
   // LEFT COLUMN: master participants list (CRUD)
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -44,13 +48,17 @@ export default function Page() {
   const [cycleParticipants, setCycleParticipants] = useState<CycleParticipant[]>([])
   const [cycleError, setCycleError] = useState<string | null>(null)
 
-  // Compute groups from *cycle participants* (weekly state), memoized
-  const groups = useMemo(() => {
-    return makeGroups(cycleParticipants)
-  }, [cycleParticipants])
+  // Groups from weekly roster
+  const groups = useMemo(() => makeGroups(cycleParticipants), [cycleParticipants])
+
+  const attendingCount = useMemo(
+    () => cycleParticipants.filter(isAttending).length,
+    [cycleParticipants]
+  )
 
   // ---------
   // CRUD: master participants
+
   async function loadParticipants() {
     try {
       const res = await fetch('/api/participants')
@@ -93,7 +101,6 @@ export default function Page() {
       setPhoneNumber('')
       setHasReading(false)
 
-      // Reload master list AND re-sync cycle roster
       await loadParticipants()
       await loadCycleRoster()
     } catch (err) {
@@ -148,7 +155,6 @@ export default function Page() {
       const syncRes = await fetch(`/api/cycles/${cycle.id}/sync`, { method: 'POST' })
       if (!syncRes.ok) {
         console.error('Failed to sync cycle roster')
-        // don’t hard-fail; still attempt to load what exists
       }
 
       // 3) load roster (cycle participants flattened)
@@ -186,7 +192,6 @@ export default function Page() {
     await loadCycleRoster()
   }
 
-  // Load once on mount
   useEffect(() => {
     loadParticipants()
     loadCycleRoster()
@@ -205,9 +210,9 @@ export default function Page() {
         Administrator Page
       </h1>
 
-      {/* LEFT: Folks (unchanged UI) */}
       <div className="flex flex-col sm:flex-row gap-4 items-stretch p-4 rounded-md -4">
-        <div className="flex-1  flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
+        {/* LEFT: Folks (CRUD) */}
+        <div className="flex-1 flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
           <h2 className="font-bold text-black text-xl mb-2">Folks</h2>
           <h4>Instructions: Here is where you can add, update or delete participants.</h4>
 
@@ -286,7 +291,7 @@ export default function Page() {
                 <li key={p.id} className="flex items-center gap-4 rounded-md p-3 text-sm">
                   <span className="font-semibold">{p.name}</span>
 
-                  <span>{p.has_reading ? '(reader)' : 'not reading'}</span>
+                  <span>{p.has_reading ? '(pages)' : 'no pages'}</span>
 
                   <label className="flex items-center gap-2">
                     <input
@@ -311,153 +316,240 @@ export default function Page() {
             </ul>
           )}
         </div>
+
+        {/* RIGHT: Weekly seating + schedule */}
+<div className="flex-1 flex flex-col gap-4 p-4 bg-white/80 rounded-xl shadow-sm border border-black/5">
+  <div className="flex items-start justify-between gap-4">
+    <div>
+      <h2 className="text-2xl font-semibold text-gray-900">This Week</h2>
+      {cycleId && (
+        <div className="text-xs text-gray-600 mt-1">
+          Cycle: <span className="font-mono">{cycleId}</span>
+        </div>
+      )}
+    </div>
+
+    <div className="text-sm text-gray-700 bg-white rounded-lg px-3 py-2 border border-black/5 shadow-sm">
+      Attending: <span className="font-semibold">{attendingCount}</span> / {cycleParticipants.length}
+    </div>
+  </div>
+
+  {(cycleError || groups.error) && (
+    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+      {cycleError ?? groups.error}
+    </div>
+  )}
+
+  {/* Seating */}
+  <div className="bg-white rounded-xl border border-black/5 shadow-sm p-4">
+    <div className="flex items-center justify-between mb-3">
+      <h3 className="text-lg font-semibold text-gray-900">Seating</h3>
+      <div className="text-xs text-gray-500">Non-attendees are excluded</div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Table */}
+      <div className="rounded-lg border border-black/5 p-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-medium text-gray-900">Table</div>
+          <div className="text-xs text-gray-600">{groups.table.length} people</div>
+        </div>
+
+        {groups.table.length === 0 ? (
+          <div className="text-sm text-gray-600">No one at the table.</div>
+        ) : (
+          <ul className="space-y-2">
+            {groups.table.map(p => (
+              <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                <div className="min-w-0">
+                  <div className="font-medium text-gray-900 truncate">{p.name}</div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {p.email ?? '—'} • {p.phone_number ?? '—'}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <span className="text-xs rounded-full bg-white border border-black/10 px-2 py-0.5 text-gray-700">
+                    {p.attendance ?? 'unknown'}
+                  </span>
+                  <span
+                    className={`text-xs rounded-full border px-2 py-0.5 ${
+                      p.has_reading
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-gray-100 border-black/10 text-gray-700'
+                    }`}
+                  >
+                    {p.has_reading ? 'pages' : 'no pages'}
+                  </span>
+                  <span className="text-xs rounded-full bg-white border border-black/10 px-2 py-0.5 text-gray-700">
+                    {p.reading ?? 'unassigned'}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
-      {/* RIGHT: Weekly reader schedule (uses cycle roster) */}
-      <div className="flex flex-col sm:flex-row gap-4 items-stretch p-4 rounded-md -4">
-        <div className="flex-1 flex flex-col p-4 bg-white/80 rounded-md">
-          <h2 className="text-xl font-bold mb-1">Reader Schedule</h2>
-          {cycleId && <div className="text-xs text-gray-600 mb-3">Cycle: {cycleId}</div>}
-
-          {cycleError && <p className="text-red-600 mb-3">{cycleError}</p>}
-          {groups.error && <p className="text-red-600 mb-3">{groups.error}</p>}
-
-          {/* Up next */}
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold">Up Next</h3>
-
-            <div className="mt-2">
-              <div className="font-medium">Table</div>
-              {groups.upNext?.table ? (
-                <div className="flex items-center gap-2">
-                  <span>{groups.upNext.table.name}</span>
-                  <button
-                    className="rounded-md bg-white px-2 py-1 text-black"
-                    onClick={() => patchCycleParticipant(groups.upNext!.table!.id, { reading: 'confirmed' })}
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    className="rounded-md bg-white px-2 py-1 text-black"
-                    onClick={() => patchCycleParticipant(groups.upNext!.table!.id, { reading: 'deferred' })}
-                  >
-                    Defer
-                  </button>
-                </div>
-              ) : (
-                <div className="text-sm text-gray-600">No one up next.</div>
-              )}
-            </div>
-
-            <div className="mt-2">
-              <div className="font-medium">Lounge</div>
-              {groups.upNext?.lounge ? (
-                <div className="flex items-center gap-2">
-                  <span>{groups.upNext.lounge.name}</span>
-                  <button
-                    className="rounded-md bg-white px-2 py-1 text-black"
-                    onClick={() =>
-                      patchCycleParticipant(groups.upNext!.lounge!.id, { reading: 'confirmed' })
-                    }
-                  >
-                    Confirm
-                  </button>
-                  <button
-                    className="rounded-md bg-white px-2 py-1 text-black"
-                    onClick={() =>
-                      patchCycleParticipant(groups.upNext!.lounge!.id, { reading: 'deferred' })
-                    }
-                  >
-                    Defer
-                  </button>
-                </div>
-              ) : (
-                <div className="text-sm text-gray-600">No one up next.</div>
-              )}
-            </div>
-          </div>
-
-          {/* Keep your existing "Scheduled / Bonus" display */}
-          <div className="mb-4">
-            <h3 className="text-lg font-semibold">Table</h3>
-
-            <div className="mt-2">
-              <div className="font-medium">Scheduled</div>
-              {groups.readers.table.scheduled.length === 0 ? (
-                <div className="text-sm text-gray-600">No scheduled readers.</div>
-              ) : (
-                <ul className="list-disc ml-5">
-                  {groups.readers.table.scheduled.map(p => (
-                    <li key={p.id}>
-                      {p.name}{' '}
-                      <span className="text-xs text-gray-600">
-                        ({p.reading ?? 'unassigned'})
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="mt-2">
-              <div className="font-medium">Bonus</div>
-              {groups.readers.table.bonus.length === 0 ? (
-                <div className="text-sm text-gray-600">No bonus readers.</div>
-              ) : (
-                <ul className="list-disc ml-5">
-                  {groups.readers.table.bonus.map(p => (
-                    <li key={p.id}>
-                      {p.name}{' '}
-                      <span className="text-xs text-gray-600">
-                        ({p.reading ?? 'unassigned'})
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-semibold">Lounge</h3>
-
-            <div className="mt-2">
-              <div className="font-medium">Scheduled</div>
-              {groups.readers.lounge.scheduled.length === 0 ? (
-                <div className="text-sm text-gray-600">No scheduled readers.</div>
-              ) : (
-                <ul className="list-disc ml-5">
-                  {groups.readers.lounge.scheduled.map(p => (
-                    <li key={p.id}>
-                      {p.name}{' '}
-                      <span className="text-xs text-gray-600">
-                        ({p.reading ?? 'unassigned'})
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="mt-2">
-              <div className="font-medium">Bonus</div>
-              {groups.readers.lounge.bonus.length === 0 ? (
-                <div className="text-sm text-gray-600">No bonus readers.</div>
-              ) : (
-                <ul className="list-disc ml-5">
-                  {groups.readers.lounge.bonus.map(p => (
-                    <li key={p.id}>
-                      {p.name}{' '}
-                      <span className="text-xs text-gray-600">
-                        ({p.reading ?? 'unassigned'})
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
+      {/* Lounge */}
+      <div className="rounded-lg border border-black/5 p-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="font-medium text-gray-900">Lounge</div>
+          <div className="text-xs text-gray-600">{groups.lounge.length} people</div>
         </div>
+
+        {groups.lounge.length === 0 ? (
+          <div className="text-sm text-gray-600">No one in the lounge.</div>
+        ) : (
+          <ul className="space-y-2">
+            {groups.lounge.map(p => (
+              <li key={p.id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-2">
+                <div className="min-w-0">
+                  <div className="font-medium text-gray-900 truncate">{p.name}</div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {p.email ?? '—'} • {p.phone_number ?? '—'}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <span className="text-xs rounded-full bg-white border border-black/10 px-2 py-0.5 text-gray-700">
+                    {p.attendance ?? 'unknown'}
+                  </span>
+                  <span
+                    className={`text-xs rounded-full border px-2 py-0.5 ${
+                      p.has_reading
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-gray-100 border-black/10 text-gray-700'
+                    }`}
+                  >
+                    {p.has_reading ? 'pages' : 'no pages'}
+                  </span>
+                  <span className="text-xs rounded-full bg-white border border-black/10 px-2 py-0.5 text-gray-700">
+                    {p.reading ?? 'unassigned'}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  </div>
+
+  {/* Up Next */}
+  <div className="bg-white rounded-xl border border-black/5 shadow-sm p-4">
+    <h3 className="text-lg font-semibold text-gray-900 mb-3">Up Next</h3>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {(['table', 'lounge'] as const).map(side => {
+        const person = groups.upNext?.[side] ?? null
+        return (
+          <div key={side} className="rounded-lg border border-black/5 p-3">
+            <div className="font-medium text-gray-900 mb-2">
+              {side === 'table' ? 'Table' : 'Lounge'}
+            </div>
+
+            {!person ? (
+              <div className="text-sm text-gray-600">No one up next.</div>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-gray-900 truncate">{person.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {person.has_reading ? 'pages' : 'no pages'} • {person.reading ?? 'unassigned'}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    className="rounded-lg bg-gray-900 text-white px-3 py-1.5 text-sm hover:bg-gray-800"
+                    onClick={() => patchCycleParticipant(person.id, { reading: 'confirmed' })}
+                  >
+                    Confirm
+                  </button>
+                  <button
+                    className="rounded-lg bg-white border border-black/10 text-gray-900 px-3 py-1.5 text-sm hover:bg-gray-50"
+                    onClick={() => patchCycleParticipant(person.id, { reading: 'deferred' })}
+                  >
+                    Defer
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  </div>
+
+  {/* Readers */}
+  <div className="bg-white rounded-xl border border-black/5 shadow-sm p-4">
+    <h3 className="text-lg font-semibold text-gray-900 mb-3">Readers</h3>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="rounded-lg border border-black/5 p-3">
+        <div className="font-medium text-gray-900 mb-2">Table</div>
+
+        <div className="text-sm text-gray-700 mb-2">Scheduled</div>
+        {groups.readers.table.scheduled.length === 0 ? (
+          <div className="text-sm text-gray-600">None.</div>
+        ) : (
+          <ul className="space-y-1">
+            {groups.readers.table.scheduled.map(p => (
+              <li key={p.id} className="text-sm text-gray-900">
+                {p.name} <span className="text-xs text-gray-500">({p.reading ?? 'unassigned'})</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="text-sm text-gray-700 mt-4 mb-2">Bonus</div>
+        {groups.readers.table.bonus.length === 0 ? (
+          <div className="text-sm text-gray-600">None.</div>
+        ) : (
+          <ul className="space-y-1">
+            {groups.readers.table.bonus.map(p => (
+              <li key={p.id} className="text-sm text-gray-900">
+                {p.name} <span className="text-xs text-gray-500">({p.reading ?? 'unassigned'})</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="rounded-lg border border-black/5 p-3">
+        <div className="font-medium text-gray-900 mb-2">Lounge</div>
+
+        <div className="text-sm text-gray-700 mb-2">Scheduled</div>
+        {groups.readers.lounge.scheduled.length === 0 ? (
+          <div className="text-sm text-gray-600">None.</div>
+        ) : (
+          <ul className="space-y-1">
+            {groups.readers.lounge.scheduled.map(p => (
+              <li key={p.id} className="text-sm text-gray-900">
+                {p.name} <span className="text-xs text-gray-500">({p.reading ?? 'unassigned'})</span>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="text-sm text-gray-700 mt-4 mb-2">Bonus</div>
+        {groups.readers.lounge.bonus.length === 0 ? (
+          <div className="text-sm text-gray-600">None.</div>
+        ) : (
+          <ul className="space-y-1">
+            {groups.readers.lounge.bonus.map(p => (
+              <li key={p.id} className="text-sm text-gray-900">
+                {p.name} <span className="text-xs text-gray-500">({p.reading ?? 'unassigned'})</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  </div>
+</div>
+
       </div>
     </main>
   )

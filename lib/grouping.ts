@@ -16,7 +16,7 @@ export type Participant = {
   // "Eligible to read at all" (master preference)
   has_reading: boolean
 
-  // NEW (weekly / cycle state) - optional so old callers still work
+  // Weekly / cycle state (optional so old callers still work)
   attendance?: AttendanceStatus
   reading?: ReadingStatus
   responded_at?: string | null
@@ -37,8 +37,7 @@ export type GroupResult = {
     lounge: GroupReaders
   }
 
-  // Optional, but useful for UI:
-  // who is currently "up next" (pending) or would be next (alphabetical) if none pending
+  // Who is currently "up next" (pending) or would be next (alphabetical) if none pending
   upNext?: {
     table: Participant | null
     lounge: Participant | null
@@ -84,17 +83,25 @@ function sortByFirstName(a: Participant, b: Participant): number {
   return a.id - b.id
 }
 
+/**
+ * Seating rule:
+ * - If attendance is missing, treat as "unknown" and include.
+ * - Exclude ONLY if explicitly "no".
+ */
 function isAttending(p: Participant): boolean {
-  // If not provided, treat as eligible.
   return (p.attendance ?? 'unknown') !== 'no'
 }
 
+/**
+ * Reader eligibility THIS cycle (separate from seating):
+ * - must be attending (in the room)
+ * - must have pages (has_reading true)
+ * - must be unassigned this cycle
+ */
 function isEligibleToBePickedThisCycle(p: Participant): boolean {
-  if (!p.has_reading) return false
   if (!isAttending(p)) return false
+  if (!p.has_reading) return false
 
-  // If we have cycle state, skip these.
-  // (If cycle state is missing, defaults to 'unassigned'.)
   const status = p.reading ?? 'unassigned'
   if (status === 'deferred') return false
   if (status === 'confirmed') return false
@@ -105,7 +112,9 @@ function isEligibleToBePickedThisCycle(p: Participant): boolean {
 
 function getPendingOrAlphabeticalNext(groupMembers: Participant[]): Participant | null {
   // If someone is already pending in this group, they are "up next"
-  const pending = groupMembers.find(p => (p.reading ?? 'unassigned') === 'pending')
+  const pending = groupMembers.find(
+    p => (p.reading ?? 'unassigned') === 'pending' && isAttending(p) && p.has_reading
+  )
   if (pending) return pending
 
   // Otherwise, choose alphabetical next eligible
@@ -177,22 +186,36 @@ function assignReadersForGroup(
 
 /**
  * makeGroups:
- * - <=8: one group (table), lounge empty
- * - >8: random split into 2 groups, ensure 2 readers each
- * - also assigns readers per group (4 scheduled + 2 bonus per group), using alphabetical rotation
+ * - Seating is based ONLY on attendance.
+ * - Reading assignment is separate and uses has_reading + reading status.
  */
 export function makeGroups(
   participants: Participant[],
   rotation?: RotationState
 ): GroupResult {
-  const total = participants.length
   const tableStartIndex = rotation?.tableStartIndex ?? 0
   const loungeStartIndex = rotation?.loungeStartIndex ?? 0
 
-  // NOTE: your comment said <=10 but code uses <=8; pick one.
+  // ✅ Seat only attending people (pages flag does NOT affect seating)
+  const attending = participants.filter(isAttending)
+  const total = attending.length
+
+  if (total === 0) {
+    return {
+      table: [],
+      lounge: [],
+      error: 'No attendees for this week.',
+      readers: {
+        table: { scheduled: [], bonus: [] },
+        lounge: { scheduled: [], bonus: [] },
+      },
+      upNext: { table: null, lounge: null },
+    }
+  }
+
+  // <=8: everyone at the table
   if (total <= 8) {
-    const table = shuffle(participants)
-
+    const table = shuffle(attending)
     const tableReaders = assignReadersForGroup(table, tableStartIndex, 4, 2)
 
     return {
@@ -209,54 +232,31 @@ export function makeGroups(
     }
   }
 
-  const readers = participants.filter(p => p.has_reading && isAttending(p))
-  const nonReaders = participants.filter(p => !p.has_reading || !isAttending(p))
-
-  // Need at least 4 eligible readers total to guarantee 2 per group
-  if (readers.length < 4) {
-    const table = shuffle(participants)
-    const tableReaders = assignReadersForGroup(table, tableStartIndex, 4, 2)
-
-    return {
-      table,
-      lounge: [],
-      error: 'Not enough eligible readers to have at least 2 in each group.',
-      readers: {
-        table: tableReaders.readers,
-        lounge: { scheduled: [], bonus: [] },
-      },
-      upNext: {
-        table: getPendingOrAlphabeticalNext(table),
-        lounge: null,
-      },
-    }
-  }
-
-  const shuffledReaders = shuffle(readers)
-  const shuffledNonReaders = shuffle(nonReaders)
-
+  // >8: split attending into 2 groups (balanced)
+  const shuffled = shuffle(attending)
   const lounge: Participant[] = []
   const table: Participant[] = []
 
-  // Seed each group with 2 readers
-  lounge.push(shuffledReaders[0], shuffledReaders[1])
-  table.push(shuffledReaders[2], shuffledReaders[3])
-
-  const remainingReaders = shuffledReaders.slice(4)
-  const remaining = shuffle([...remainingReaders, ...shuffledNonReaders])
-
-  // Balance group sizes
-  for (const p of remaining) {
+  for (const p of shuffled) {
     if (lounge.length <= table.length) lounge.push(p)
     else table.push(p)
   }
 
+  // Readers assigned AFTER seating (separate concern)
   const tableReaders = assignReadersForGroup(table, tableStartIndex, 4, 2)
   const loungeReaders = assignReadersForGroup(lounge, loungeStartIndex, 4, 2)
+
+  // Optional helpful error if nobody can be selected
+  const eligibleCount = attending.filter(isEligibleToBePickedThisCycle).length
+  const error =
+    eligibleCount === 0
+      ? 'No eligible readers (must be attending + have pages + unassigned).'
+      : undefined
 
   return {
     table,
     lounge,
+    error,
     readers: {
       table: tableReaders.readers,
       lounge: loungeReaders.readers,
