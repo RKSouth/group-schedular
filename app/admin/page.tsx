@@ -70,10 +70,10 @@ function Badge({
     tone === 'good'
       ? 'bg-green-100 text-green-800 border-green-200'
       : tone === 'warn'
-      ? 'bg-amber-100 text-amber-900 border-amber-200'
-      : tone === 'bad'
-      ? 'bg-red-100 text-red-800 border-red-200'
-      : 'bg-gray-100 text-gray-800 border-gray-200'
+        ? 'bg-amber-100 text-amber-900 border-amber-200'
+        : tone === 'bad'
+          ? 'bg-red-100 text-red-800 border-red-200'
+          : 'bg-gray-100 text-gray-800 border-gray-200'
 
   return (
     <span
@@ -110,20 +110,20 @@ export default function Page() {
   const [openParticipantId, setOpenParticipantId] = useState<number | null>(null)
 
   const seatedParticipants = useMemo(() => {
-    return cycleParticipants.filter(person => (person.attendance ?? 'unknown') === 'yes')
+    return cycleParticipants.filter((person) => (person.attendance ?? 'unknown') === 'yes')
   }, [cycleParticipants])
 
   const groups = useMemo(() => makeGroups(seatedParticipants), [seatedParticipants])
 
   const attendingCount = useMemo(() => {
-    return cycleParticipants.filter(person => (person.attendance ?? 'unknown') === 'yes').length
+    return cycleParticipants.filter((person) => (person.attendance ?? 'unknown') === 'yes').length
   }, [cycleParticipants])
 
-const cycleByParticipantId = useMemo(() => {
-  const map = new Map<number, CycleParticipant>()
-  for (const person of cycleParticipants) map.set(person.id, person)
-  return map
-}, [cycleParticipants])
+  const cycleByParticipantId = useMemo(() => {
+    const map = new Map<number, CycleParticipant>()
+    for (const person of cycleParticipants) map.set(person.id, person)
+    return map
+  }, [cycleParticipants])
 
   // ---------
   // CRUD: master participants
@@ -138,7 +138,7 @@ const cycleByParticipantId = useMemo(() => {
       setParticipants(data)
 
       // If the open participant disappeared, close the panel
-      if (openParticipantId !== null && !data.some(person => person.id === openParticipantId)) {
+      if (openParticipantId !== null && !data.some((person) => person.id === openParticipantId)) {
         setOpenParticipantId(null)
       }
     } catch (err) {
@@ -244,7 +244,7 @@ const cycleByParticipantId = useMemo(() => {
       setCycleParticipants(roster)
 
       // If the open person disappeared, close the panel
-      if (openId !== null && !roster.some(person => person.id === openId)) {
+      if (openId !== null && !roster.some((person) => person.id === openId)) {
         setOpenId(null)
       }
     } catch (err) {
@@ -282,10 +282,7 @@ const cycleByParticipantId = useMemo(() => {
 
   return (
     <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
-      <button
-        className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1"
-        onClick={logout}
-      >
+      <button className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1" onClick={logout}>
         Logout
       </button>
 
@@ -311,7 +308,7 @@ const cycleByParticipantId = useMemo(() => {
                 type="text"
                 value={name}
                 placeholder="Enter name"
-                onChange={e => setName(e.target.value)}
+                onChange={(e) => setName(e.target.value)}
                 className="ml-2 px-2 bg-white text-black rounded-md"
               />
             </div>
@@ -325,7 +322,7 @@ const cycleByParticipantId = useMemo(() => {
                 type="text"
                 value={email}
                 placeholder="Enter email"
-                onChange={e => setEmail(e.target.value)}
+                onChange={(e) => setEmail(e.target.value)}
                 className="ml-2 px-2 bg-white text-black rounded-md"
               />
             </div>
@@ -339,7 +336,7 @@ const cycleByParticipantId = useMemo(() => {
                 type="text"
                 value={phoneNumber}
                 placeholder="1234567890"
-                onChange={e => setPhoneNumber(e.target.value)}
+                onChange={(e) => setPhoneNumber(e.target.value)}
                 className="ml-2 px-2 bg-white text-black rounded-md"
               />
             </div>
@@ -348,7 +345,7 @@ const cycleByParticipantId = useMemo(() => {
               <input
                 type="checkbox"
                 checked={hasReading}
-                onChange={e => setHasReading(e.target.checked)}
+                onChange={(e) => setHasReading(e.target.checked)}
                 className="mr-2"
               />
               Pages (eligible to read)
@@ -373,102 +370,100 @@ const cycleByParticipantId = useMemo(() => {
             <p className="text-white/90">No one yet.</p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {participants.map(person => {
+              {participants.map((person) => {
                 const isOpen = openParticipantId === person.id
                 const cycleInfo = cycleByParticipantId.get(person.id)
-                const going = labelAttendance(cycleInfo?.attendance) 
+                const going = labelAttendance(cycleInfo?.attendance)
 
                 return (
                   <li key={person.id} className="rounded-md p-3 text-sm bg-white/10">
-  <div className="flex items-start gap-3">
-    <button
-      type="button"
-      className="min-w-0 flex-1 text-left text-xl font-semibold text-white"
-      onClick={() => setOpenParticipantId(isOpen ? null : person.id)}
-    >
-      {person.name}
-    </button>
-    <div className="flex items-center gap-3 ml-auto">
-            <Badge text={going.text} tone={going.tone} />
+                    <div className="flex items-start gap-3">
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left text-xl font-semibold text-white"
+                        onClick={() => setOpenParticipantId(isOpen ? null : person.id)}
+                      >
+                        {person.name}
+                      </button>
+                      <div className="flex items-center gap-3 ml-auto">
+                        <Badge text={going.text} tone={going.tone} />
 
-      <button
-        type="button"
-        className="rounded-md bg-white px-2 py-1 text-black text-xs"
-        onClick={() => deleteParticipant(person.id)}
-      >
-        Delete
-      </button>
-    </div>
-  </div>
+                        <button
+                          type="button"
+                          className="rounded-md bg-white px-2 py-1 text-black text-xs"
+                          onClick={() => deleteParticipant(person.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
 
-  {/* Details shown BELOW the name */}
-  {openParticipantId === person.id && (
-    <div className="mt-2 rounded-md bg-white/10 p-3">
-      <div className="text-xs text-white/80 mb-2">
-        <div>Email: {person.email ?? '—'}</div>
-        <div>Cell: {formatPhone(person.phone_number)}</div>
-           <label className="flex items-center gap-2 text-xs text-white">
-            Reading
-        <input
-          type="checkbox"
-          checked={person.has_reading}
-          onChange={e => updateHasReading(person.id, e.target.checked)}
-        />
-      </label>
+                    {/* Details shown BELOW the name */}
+                    {openParticipantId === person.id && (
+                      <div className="mt-2 rounded-md p-3">
+                        <div className="text-xs text-white/80 mb-2">
+                          <div className="text-[1rem] text-black">Email: {person.email ?? '—'}</div>
+                          <div className="text-[1rem] text-black">
+                            Cell: {formatPhone(person.phone_number)}
+                          </div>
+                          <hr className="my-2 border-black/20" />
 
-      <div><label>Attendance</label>
-        <button 
-                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { attendance: 'yes' })
-                                  }
-                                >
-                               yes
-                                </button>
-                                <button
-                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { attendance: 'maybe' })
-                                  }
-                                >
-                                maybe
-                                </button>
-                                <button
-                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { attendance: 'no' })
-                                  }
-                                >
-                                 No
-                                </button></div>
-     <div><label>Reading</label>  <button
-                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
-                                  onClick={() => patchCycleParticipant(person.id, { reading: 'pending' })}
-                                >
-                                  Set pending
-                                </button>
-                                <button
-                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { reading: 'confirmed' })
-                                  }
-                                >
-                                  Confirm
-                                </button>
-                                <button
-                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { reading: 'deferred' })
-                                  }
-                                >
-                                  Defer
-                                </button></div>
-                              
-      </div>
-    </div>
-  )}
-</li>
-
+                          <div>
+                            <label className="text-[1rem] text-black">Attending</label>
+                            <button
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              onClick={() =>
+                                patchCycleParticipant(person.id, { attendance: 'yes' })
+                              }
+                            >
+                              yes
+                            </button>
+                            <button
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              onClick={() =>
+                                patchCycleParticipant(person.id, { attendance: 'maybe' })
+                              }
+                            >
+                              maybe
+                            </button>
+                            <button
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              onClick={() => patchCycleParticipant(person.id, { attendance: 'no' })}
+                            >
+                              No
+                            </button>
+                          </div>
+                          <div>
+                            <label className="text-[1rem] text-black">Reading</label>{' '}
+                            <button
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              onClick={() =>
+                                patchCycleParticipant(person.id, { reading: 'pending' })
+                              }
+                            >
+                              Set pending
+                            </button>
+                            <button
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              onClick={() =>
+                                patchCycleParticipant(person.id, { reading: 'confirmed' })
+                              }
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              onClick={() =>
+                                patchCycleParticipant(person.id, { reading: 'deferred' })
+                              }
+                            >
+                              Defer
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </li>
                 )
               })}
             </ul>
@@ -506,7 +501,7 @@ const cycleByParticipantId = useMemo(() => {
                   <div className="text-sm text-gray-600">No one at the table.</div>
                 ) : (
                   <ul className="flex flex-col gap-2">
-                    {groups.table.map(person => {
+                    {groups.table.map((person) => {
                       const a = labelAttendance(person.attendance)
                       const pages = person.has_reading
                         ? { text: 'Has pages', tone: 'good' as const }
@@ -528,16 +523,11 @@ const cycleByParticipantId = useMemo(() => {
 
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex flex-wrap justify-end gap-2">
-
                                 <Badge text={pages.text} tone={pages.tone} />
                               </div>
-                              <div className="flex flex-wrap justify-end gap-2">
-
-                              </div>
+                              <div className="flex flex-wrap justify-end gap-2"></div>
                             </div>
                           </div>
-
-                       
                         </li>
                       )
                     })}
@@ -556,7 +546,7 @@ const cycleByParticipantId = useMemo(() => {
                   <div className="text-sm text-gray-600">No one in the lounge.</div>
                 ) : (
                   <ul className="flex flex-col gap-2">
-                    {groups.lounge.map(person => {
+                    {groups.lounge.map((person) => {
                       const a = labelAttendance(person.attendance)
                       const pages = person.has_reading
                         ? { text: 'Has pages', tone: 'good' as const }
@@ -564,7 +554,7 @@ const cycleByParticipantId = useMemo(() => {
                       const r = labelReading(person.reading)
 
                       return (
-                           <li key={person.id} className="rounded-lg border bg-white p-3">
+                        <li key={person.id} className="rounded-lg border bg-white p-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <button
@@ -578,16 +568,11 @@ const cycleByParticipantId = useMemo(() => {
 
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex flex-wrap justify-end gap-2">
-
                                 <Badge text={pages.text} tone={pages.tone} />
                               </div>
-                              <div className="flex flex-wrap justify-end gap-2">
-
-                              </div>
+                              <div className="flex flex-wrap justify-end gap-2"></div>
                             </div>
                           </div>
-
-                       
                         </li>
                       )
                     })}
@@ -596,7 +581,6 @@ const cycleByParticipantId = useMemo(() => {
               </div>
             </div>
           </div>
-
 
           {/* Reader Schedule */}
           <div>
@@ -612,7 +596,7 @@ const cycleByParticipantId = useMemo(() => {
                     <div className="text-sm text-gray-600">No scheduled readers.</div>
                   ) : (
                     <ul className="flex flex-col gap-1">
-                      {groups.readers.table.scheduled.map(person => {
+                      {groups.readers.table.scheduled.map((person) => {
                         const rs = labelReading(person.reading)
                         return (
                           <li key={person.id} className="flex items-center justify-between text-sm">
@@ -631,7 +615,7 @@ const cycleByParticipantId = useMemo(() => {
                     <div className="text-sm text-gray-600">No bonus readers.</div>
                   ) : (
                     <ul className="flex flex-col gap-1">
-                      {groups.readers.table.bonus.map(person => {
+                      {groups.readers.table.bonus.map((person) => {
                         const rs = labelReading(person.reading)
                         return (
                           <li key={person.id} className="flex items-center justify-between text-sm">
@@ -654,7 +638,7 @@ const cycleByParticipantId = useMemo(() => {
                     <div className="text-sm text-gray-600">No scheduled readers.</div>
                   ) : (
                     <ul className="flex flex-col gap-1">
-                      {groups.readers.lounge.scheduled.map(person => {
+                      {groups.readers.lounge.scheduled.map((person) => {
                         const rs = labelReading(person.reading)
                         return (
                           <li key={person.id} className="flex items-center justify-between text-sm">
@@ -673,7 +657,7 @@ const cycleByParticipantId = useMemo(() => {
                     <div className="text-sm text-gray-600">No bonus readers.</div>
                   ) : (
                     <ul className="flex flex-col gap-1">
-                      {groups.readers.lounge.bonus.map(person => {
+                      {groups.readers.lounge.bonus.map((person) => {
                         const rs = labelReading(person.reading)
                         return (
                           <li key={person.id} className="flex items-center justify-between text-sm">

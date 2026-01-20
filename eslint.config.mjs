@@ -1,22 +1,46 @@
-import next from "eslint-config-next";
-import prettierConfig from "eslint-config-prettier";
-import prettierPlugin from "eslint-plugin-prettier";
+import { FlatCompat } from '@eslint/eslintrc'
 
-export default [
-  // Next.js recommended rules
-  ...next(),
+const compat = new FlatCompat({
+  // import.meta.dirname is available after Node.js v20.11.0
+  baseDirectory: import.meta.dirname,
+})
 
-  // Prettier integration:
-  // 1) turn off ESLint rules that fight Prettier
-  prettierConfig,
-
-  // 2) run Prettier as an ESLint rule (so ESLint "fix" formats your code)
-  {
-    plugins: {
-      prettier: prettierPlugin
-    },
+const eslintConfig = [
+  ...compat.config({
+    extends: [
+      'next',
+      'next/core-web-vitals',
+      'next/typescript',
+      'plugin:prettier/recommended',
+      'plugin:jsx-a11y/recommended',
+    ],
+    plugins: ['prettier', 'jsx-a11y'],
     rules: {
-      "prettier/prettier": "error"
-    }
-  }
-];
+      'prettier/prettier': [
+        'error',
+        {
+          trailingComma: 'all',
+          semi: false,
+          tabWidth: 2,
+          singleQuote: true,
+          printWidth: 80,
+          endOfLine: 'auto',
+          arrowParens: 'always',
+          plugins: ['prettier-plugin-tailwindcss'],
+        },
+        {
+          usePrettierrc: false,
+        },
+      ],
+      'react/react-in-jsx-scope': 'off',
+      'jsx-a11y/alt-text': 'warn',
+      'jsx-a11y/aria-props': 'warn',
+      'jsx-a11y/aria-proptypes': 'warn',
+      'jsx-a11y/aria-unsupported-elements': 'warn',
+      'jsx-a11y/role-has-required-aria-props': 'warn',
+      'jsx-a11y/role-supports-aria-props': 'warn',
+    },
+  }),
+]
+
+export default eslintConfig
