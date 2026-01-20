@@ -1,3 +1,4 @@
+// app/admin/page.tsx
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
@@ -85,7 +86,6 @@ function Badge({
 
 function formatPhone(phone: string | null | undefined) {
   if (!phone) return '—'
-  // keep simple; you can fancy-format later
   return phone
 }
 
@@ -103,11 +103,27 @@ export default function Page() {
   const [cycleParticipants, setCycleParticipants] = useState<CycleParticipant[]>([])
   const [cycleError, setCycleError] = useState<string | null>(null)
 
-  const groups = useMemo(() => makeGroups(cycleParticipants), [cycleParticipants])
+  // click-to-expand on seating rows (right side)
+  const [openId, setOpenId] = useState<number | null>(null)
+
+  // click-to-expand on master participant list (left side)
+  const [openParticipantId, setOpenParticipantId] = useState<number | null>(null)
+
+  const seatedParticipants = useMemo(() => {
+    return cycleParticipants.filter(person => (person.attendance ?? 'unknown') === 'yes')
+  }, [cycleParticipants])
+
+  const groups = useMemo(() => makeGroups(seatedParticipants), [seatedParticipants])
 
   const attendingCount = useMemo(() => {
-    return cycleParticipants.filter(p => (p.attendance ?? 'unknown') !== 'no').length
+    return cycleParticipants.filter(person => (person.attendance ?? 'unknown') === 'yes').length
   }, [cycleParticipants])
+
+const cycleByParticipantId = useMemo(() => {
+  const map = new Map<number, CycleParticipant>()
+  for (const person of cycleParticipants) map.set(person.id, person)
+  return map
+}, [cycleParticipants])
 
   // ---------
   // CRUD: master participants
@@ -120,6 +136,11 @@ export default function Page() {
       }
       const data: Participant[] = await res.json()
       setParticipants(data)
+
+      // If the open participant disappeared, close the panel
+      if (openParticipantId !== null && !data.some(person => person.id === openParticipantId)) {
+        setOpenParticipantId(null)
+      }
     } catch (err) {
       console.error('Error loading participants', err)
     }
@@ -127,8 +148,6 @@ export default function Page() {
 
   async function handleAdd() {
     if (!name.trim()) return
-    if (!email.trim()) return
-    if (!phoneNumber.trim()) return
 
     setIsLoading(true)
     try {
@@ -137,8 +156,8 @@ export default function Page() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.trim(),
-          email: email.trim(),
-          phoneNumber: phoneNumber.trim(),
+          email: email.trim() || null,
+          phoneNumber: phoneNumber.trim() || null,
           hasReading,
         }),
       })
@@ -154,7 +173,6 @@ export default function Page() {
       setPhoneNumber('')
       setHasReading(false)
 
-      // Reload master list AND re-sync cycle roster
       await loadParticipants()
       await loadCycleRoster()
     } catch (err) {
@@ -162,6 +180,11 @@ export default function Page() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  async function logout() {
+    await fetch('/admin/logout', { method: 'POST' })
+    window.location.href = '/'
   }
 
   async function deleteParticipant(id: number) {
@@ -196,7 +219,6 @@ export default function Page() {
     try {
       setCycleError(null)
 
-      // 1) get/create current cycle
       const cycleRes = await fetch('/api/cycles/current')
       if (!cycleRes.ok) {
         setCycleError('Failed to load current cycle')
@@ -205,15 +227,12 @@ export default function Page() {
       const cycle = (await cycleRes.json()) as { id: string }
       setCycleId(cycle.id)
 
-      // 2) ensure roster rows exist
       const syncRes = await fetch(`/api/cycles/${cycle.id}/sync`, { method: 'POST' })
       if (!syncRes.ok) {
         const text = await syncRes.text()
         console.error('Failed to sync cycle roster:', text)
-        // proceed anyway
       }
 
-      // 3) load roster
       const rosterRes = await fetch(`/api/cycles/${cycle.id}/participants`)
       if (!rosterRes.ok) {
         const text = await rosterRes.text()
@@ -223,6 +242,11 @@ export default function Page() {
       }
       const roster = (await rosterRes.json()) as CycleParticipant[]
       setCycleParticipants(roster)
+
+      // If the open person disappeared, close the panel
+      if (openId !== null && !roster.some(person => person.id === openId)) {
+        setOpenId(null)
+      }
     } catch (err) {
       console.error('Error loading cycle roster:', err)
       setCycleError('Unexpected error loading cycle roster')
@@ -253,20 +277,24 @@ export default function Page() {
   useEffect(() => {
     loadParticipants()
     loadCycleRoster()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
     <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
-      <a href="/admin/logout" className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1">
+      <button
+        className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1"
+        onClick={logout}
+      >
         Logout
-      </a>
+      </button>
 
       <h1 className="pt-10 text-gray-900 text-[3rem] font-bold flex items-center justify-center mb-4 mx-4">
         Administrator Page
       </h1>
 
-      {/* LEFT: Folks (leave mostly the same, just tiny cleanup) */}
       <div className="flex flex-col sm:flex-row gap-4 items-stretch p-4">
+        {/* LEFT: Folks */}
         <div className="flex-1 flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
           <h2 className="font-bold text-black text-xl mb-2">Folks</h2>
           <p className="text-sm text-black/80 mb-3">
@@ -329,7 +357,7 @@ export default function Page() {
             <button
               className="rounded-md bg-white px-3 py-1 text-black"
               onClick={handleAdd}
-              disabled={isLoading || !name.trim() || !email.trim() || !phoneNumber.trim()}
+              disabled={isLoading || !name.trim()}
             >
               {isLoading ? 'Adding…' : 'Add'}
             </button>
@@ -345,32 +373,111 @@ export default function Page() {
             <p className="text-white/90">No one yet.</p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {participants.map(p => (
-                <li key={p.id} className="flex items-center gap-3 rounded-md p-3 text-sm bg-white/10">
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold">{p.name}</div>
-                    <div className="text-xs text-white/80">
-                      {p.email ?? '—'} • {formatPhone(p.phone_number)}
-                    </div>
-                  </div>
+              {participants.map(person => {
+                const isOpen = openParticipantId === person.id
+                const cycleInfo = cycleByParticipantId.get(person.id)
+                const going = labelAttendance(cycleInfo?.attendance) 
 
-                  <label className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={p.has_reading}
-                      onChange={e => updateHasReading(p.id, e.target.checked)}
-                    />
-                    Pages
-                  </label>
+                return (
+                  <li key={person.id} className="rounded-md p-3 text-sm bg-white/10">
+  {/* Row: name on left, actions on right */}
+  <div className="flex items-start gap-3">
+    {/* Name ONLY (button). Takes remaining space. */}
+    <button
+      type="button"
+      className="min-w-0 flex-1 text-left text-xl font-semibold text-white"
+      onClick={() => setOpenParticipantId(isOpen ? null : person.id)}
+    >
+      {person.name}
+    </button>
 
-                  <button
-                    className="ml-auto rounded-md bg-white px-2 py-1 text-black"
-                    onClick={() => deleteParticipant(p.id)}
-                  >
-                    Delete
-                  </button>
-                </li>
-              ))}
+    {/* Actions row (right edge) */}
+    <div className="flex items-center gap-3 ml-auto">
+            <Badge text={going.text} tone={going.tone} />
+
+      <button
+        type="button"
+        className="rounded-md bg-white px-2 py-1 text-black text-xs"
+        onClick={() => deleteParticipant(person.id)}
+      >
+        Delete
+      </button>
+
+      {/* add more right-side controls here, they’ll stay in a row */}
+      {/* <button className="..." type="button">Something</button> */}
+    </div>
+  </div>
+
+  {/* Details shown BELOW the name */}
+  {openParticipantId === person.id && (
+    <div className="mt-2 rounded-md bg-white/10 p-3">
+      <div className="text-xs text-white/80 mb-2">
+        <div>Email: {person.email ?? '—'}</div>
+        <div>Cell: {formatPhone(person.phone_number)}</div>
+           <label className="flex items-center gap-2 text-xs text-white">
+            Reading
+        <input
+          type="checkbox"
+          checked={person.has_reading}
+          onChange={e => updateHasReading(person.id, e.target.checked)}
+        />
+      </label>
+
+      <div><label>Attendance</label>
+        <button 
+                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { attendance: 'yes' })
+                                  }
+                                >
+                               yes
+                                </button>
+                                <button
+                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { attendance: 'maybe' })
+                                  }
+                                >
+                                maybe
+                                </button>
+                                <button
+                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { attendance: 'no' })
+                                  }
+                                >
+                                 No
+                                </button></div>
+     <div><label>Reading</label>  <button
+                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
+                                  onClick={() => patchCycleParticipant(person.id, { reading: 'pending' })}
+                                >
+                                  Set pending
+                                </button>
+                                <button
+                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { reading: 'confirmed' })
+                                  }
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { reading: 'deferred' })
+                                  }
+                                >
+                                  Defer
+                                </button></div>
+                              
+      </div>
+    </div>
+  )}
+</li>
+
+                )
+              })}
             </ul>
           )}
         </div>
@@ -381,8 +488,9 @@ export default function Page() {
             <h2 className="text-2xl font-bold text-gray-900">This Week</h2>
             {cycleId && <div className="text-xs text-gray-600">Cycle: {cycleId}</div>}
             <div className="text-sm text-gray-700 mt-1">
-              Attending: <span className="font-semibold">{attendingCount}</span> / {cycleParticipants.length}{' '}
-              <span className="text-xs text-gray-500">(Anyone not marked “Not attending” is seated.)</span>
+              Attending: <span className="font-semibold">{attendingCount}</span> /{' '}
+              {cycleParticipants.length}{' '}
+              <span className="text-xs text-gray-500">(Only “Attending” people are seated.)</span>
             </div>
           </div>
 
@@ -405,20 +513,26 @@ export default function Page() {
                   <div className="text-sm text-gray-600">No one at the table.</div>
                 ) : (
                   <ul className="flex flex-col gap-2">
-                    {groups.table.map(p => {
-                      const a = labelAttendance(p.attendance)
-                      const pages = p.has_reading
+                    {groups.table.map(person => {
+                      const a = labelAttendance(person.attendance)
+                      const pages = person.has_reading
                         ? { text: 'Has pages', tone: 'good' as const }
                         : { text: 'No pages', tone: 'neutral' as const }
-                      const r = labelReading(p.reading)
+                      const r = labelReading(person.reading)
 
                       return (
-                        <li key={p.id} className="rounded-lg border bg-white p-3">
+                        <li key={person.id} className="rounded-lg border bg-white p-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="font-semibold text-gray-900">{p.name}</div>
+                              <button
+                                type="button"
+                                className="font-semibold text-gray-900 underline decoration-black/30 hover:decoration-black"
+                                onClick={() => setOpenId(openId === person.id ? null : person.id)}
+                              >
+                                {person.name}
+                              </button>
                               <div className="text-xs text-gray-500">
-                                {p.email ?? '—'} • {formatPhone(p.phone_number)}
+                                {person.email ?? '—'} • {formatPhone(person.phone_number)}
                               </div>
                             </div>
 
@@ -433,27 +547,84 @@ export default function Page() {
                             </div>
                           </div>
 
-                          {/* RSVP controls (optional but makes "unknown" go away fast) */}
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <button
-                              className="rounded-md border bg-white px-2 py-1 text-xs"
-                              onClick={() => patchCycleParticipant(p.id, { attendance: 'yes' })}
-                            >
-                              Mark attending
-                            </button>
-                            <button
-                              className="rounded-md border bg-white px-2 py-1 text-xs"
-                              onClick={() => patchCycleParticipant(p.id, { attendance: 'maybe' })}
-                            >
-                              Mark maybe
-                            </button>
-                            <button
-                              className="rounded-md border bg-white px-2 py-1 text-xs"
-                              onClick={() => patchCycleParticipant(p.id, { attendance: 'no' })}
-                            >
-                              Mark not attending
-                            </button>
-                          </div>
+                          {openId === person.id && (
+                            <div className="mt-3 rounded-md border bg-white/60 p-3 text-sm text-gray-900">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                  <span className="font-medium">Email:</span> {person.email ?? '—'}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Cell:</span>{' '}
+                                  {formatPhone(person.phone_number)}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Attendance:</span>{' '}
+                                  {labelAttendance(person.attendance).text}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Reading status:</span>{' '}
+                                  {labelReading(person.reading).text}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Pages eligible:</span>{' '}
+                                  {person.has_reading ? 'Yes' : 'No'}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Responded at:</span>{' '}
+                                  {person.responded_at ?? '—'}
+                                </div>
+                              </div>
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { attendance: 'yes' })
+                                  }
+                                >
+                                  Mark attending
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { attendance: 'maybe' })
+                                  }
+                                >
+                                  Mark maybe
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { attendance: 'no' })
+                                  }
+                                >
+                                  Mark not attending
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() => patchCycleParticipant(person.id, { reading: 'pending' })}
+                                >
+                                  Set pending
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { reading: 'confirmed' })
+                                  }
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { reading: 'deferred' })
+                                  }
+                                >
+                                  Defer
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </li>
                       )
                     })}
@@ -472,20 +643,26 @@ export default function Page() {
                   <div className="text-sm text-gray-600">No one in the lounge.</div>
                 ) : (
                   <ul className="flex flex-col gap-2">
-                    {groups.lounge.map(p => {
-                      const a = labelAttendance(p.attendance)
-                      const pages = p.has_reading
+                    {groups.lounge.map(person => {
+                      const a = labelAttendance(person.attendance)
+                      const pages = person.has_reading
                         ? { text: 'Has pages', tone: 'good' as const }
                         : { text: 'No pages', tone: 'neutral' as const }
-                      const r = labelReading(p.reading)
+                      const r = labelReading(person.reading)
 
                       return (
-                        <li key={p.id} className="rounded-lg border bg-white p-3">
+                        <li key={person.id} className="rounded-lg border bg-white p-3">
                           <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
-                              <div className="font-semibold text-gray-900">{p.name}</div>
+                              <button
+                                type="button"
+                                className="font-semibold text-gray-900 underline decoration-black/30 hover:decoration-black"
+                                onClick={() => setOpenId(openId === person.id ? null : person.id)}
+                              >
+                                {person.name}
+                              </button>
                               <div className="text-xs text-gray-500">
-                                {p.email ?? '—'} • {formatPhone(p.phone_number)}
+                                {person.email ?? '—'} • {formatPhone(person.phone_number)}
                               </div>
                             </div>
 
@@ -500,26 +677,84 @@ export default function Page() {
                             </div>
                           </div>
 
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <button
-                              className="rounded-md border bg-white px-2 py-1 text-xs"
-                              onClick={() => patchCycleParticipant(p.id, { attendance: 'yes' })}
-                            >
-                              Mark attending
-                            </button>
-                            <button
-                              className="rounded-md border bg-white px-2 py-1 text-xs"
-                              onClick={() => patchCycleParticipant(p.id, { attendance: 'maybe' })}
-                            >
-                              Mark maybe
-                            </button>
-                            <button
-                              className="rounded-md border bg-white px-2 py-1 text-xs"
-                              onClick={() => patchCycleParticipant(p.id, { attendance: 'no' })}
-                            >
-                              Mark not attending
-                            </button>
-                          </div>
+                          {openId === person.id && (
+                            <div className="mt-3 rounded-md border bg-white/60 p-3 text-sm text-gray-900">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div>
+                                  <span className="font-medium">Email:</span> {person.email ?? '—'}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Cell:</span>{' '}
+                                  {formatPhone(person.phone_number)}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Attendance:</span>{' '}
+                                  {labelAttendance(person.attendance).text}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Reading status:</span>{' '}
+                                  {labelReading(person.reading).text}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Pages eligible:</span>{' '}
+                                  {person.has_reading ? 'Yes' : 'No'}
+                                </div>
+                                <div>
+                                  <span className="font-medium">Responded at:</span>{' '}
+                                  {person.responded_at ?? '—'}
+                                </div>
+                              </div>
+
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { attendance: 'yes' })
+                                  }
+                                >
+                                  Mark attending
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { attendance: 'maybe' })
+                                  }
+                                >
+                                  Mark maybe
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { attendance: 'no' })
+                                  }
+                                >
+                                  Mark not attending
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() => patchCycleParticipant(person.id, { reading: 'pending' })}
+                                >
+                                  Set pending
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { reading: 'confirmed' })
+                                  }
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  className="rounded-md border bg-white px-2 py-1 text-xs"
+                                  onClick={() =>
+                                    patchCycleParticipant(person.id, { reading: 'deferred' })
+                                  }
+                                >
+                                  Defer
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </li>
                       )
                     })}
@@ -529,98 +764,8 @@ export default function Page() {
             </div>
           </div>
 
-          {/* Up Next */}
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Up For Next Week</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="rounded-xl border bg-white p-3">
-                <div className="font-semibold text-gray-900 mb-2">Table</div>
-                {groups.upNext?.table ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium text-gray-900">{groups.upNext.table.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {groups.upNext.table.has_reading ? 'Has pages' : 'No pages'}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        className="rounded-md bg-gray-900 px-2 py-1 text-xs text-white"
-                        onClick={() =>
-                          patchCycleParticipant(groups.upNext!.table!.id, { reading: 'confirmed' })
-                        }
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        className="rounded-md border bg-white px-2 py-1 text-xs"
-                        onClick={() =>
-                          patchCycleParticipant(groups.upNext!.table!.id, { reading: 'deferred' })
-                        }
-                      >
-                        Defer
-                      </button>
-                      <button
-                        className="rounded-md border bg-white px-2 py-1 text-xs"
-                        onClick={() =>
-                          patchCycleParticipant(groups.upNext!.table!.id, { reading: 'pending' })
-                        }
-                      >
-                        Set pending
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-600">No one up next.</div>
-                )}
-              </div>
-
-              <div className="rounded-xl border bg-white p-3">
-                <div className="font-semibold text-gray-900 mb-2">Lounge</div>
-                {groups.upNext?.lounge ? (
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium text-gray-900">{groups.upNext.lounge.name}</div>
-                      <div className="text-xs text-gray-500">
-                        {groups.upNext.lounge.has_reading ? 'Has pages' : 'No pages'}
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        className="rounded-md bg-gray-900 px-2 py-1 text-xs text-white"
-                        onClick={() =>
-                          patchCycleParticipant(groups.upNext!.lounge!.id, { reading: 'confirmed' })
-                        }
-                      >
-                        Confirm
-                      </button>
-                      <button
-                        className="rounded-md border bg-white px-2 py-1 text-xs"
-                        onClick={() =>
-                          patchCycleParticipant(groups.upNext!.lounge!.id, { reading: 'deferred' })
-                        }
-                      >
-                        Defer
-                      </button>
-                      <button
-                        className="rounded-md border bg-white px-2 py-1 text-xs"
-                        onClick={() =>
-                          patchCycleParticipant(groups.upNext!.lounge!.id, { reading: 'pending' })
-                        }
-                      >
-                        Set pending
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-600">No one up next.</div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Scheduled / Bonus */}
+          {/* Reader Schedule */}
           <div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Reader Schedule</h3>
 
@@ -634,11 +779,11 @@ export default function Page() {
                     <div className="text-sm text-gray-600">No scheduled readers.</div>
                   ) : (
                     <ul className="flex flex-col gap-1">
-                      {groups.readers.table.scheduled.map(p => {
-                        const rs = labelReading(p.reading)
+                      {groups.readers.table.scheduled.map(person => {
+                        const rs = labelReading(person.reading)
                         return (
-                          <li key={p.id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-900">{p.name}</span>
+                          <li key={person.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-900">{person.name}</span>
                             <Badge text={rs.text} tone={rs.tone} />
                           </li>
                         )
@@ -653,11 +798,11 @@ export default function Page() {
                     <div className="text-sm text-gray-600">No bonus readers.</div>
                   ) : (
                     <ul className="flex flex-col gap-1">
-                      {groups.readers.table.bonus.map(p => {
-                        const rs = labelReading(p.reading)
+                      {groups.readers.table.bonus.map(person => {
+                        const rs = labelReading(person.reading)
                         return (
-                          <li key={p.id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-900">{p.name}</span>
+                          <li key={person.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-900">{person.name}</span>
                             <Badge text={rs.text} tone={rs.tone} />
                           </li>
                         )
@@ -676,11 +821,11 @@ export default function Page() {
                     <div className="text-sm text-gray-600">No scheduled readers.</div>
                   ) : (
                     <ul className="flex flex-col gap-1">
-                      {groups.readers.lounge.scheduled.map(p => {
-                        const rs = labelReading(p.reading)
+                      {groups.readers.lounge.scheduled.map(person => {
+                        const rs = labelReading(person.reading)
                         return (
-                          <li key={p.id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-900">{p.name}</span>
+                          <li key={person.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-900">{person.name}</span>
                             <Badge text={rs.text} tone={rs.tone} />
                           </li>
                         )
@@ -695,11 +840,11 @@ export default function Page() {
                     <div className="text-sm text-gray-600">No bonus readers.</div>
                   ) : (
                     <ul className="flex flex-col gap-1">
-                      {groups.readers.lounge.bonus.map(p => {
-                        const rs = labelReading(p.reading)
+                      {groups.readers.lounge.bonus.map(person => {
+                        const rs = labelReading(person.reading)
                         return (
-                          <li key={p.id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-900">{p.name}</span>
+                          <li key={person.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-900">{person.name}</span>
                             <Badge text={rs.text} tone={rs.tone} />
                           </li>
                         )

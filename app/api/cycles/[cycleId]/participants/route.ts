@@ -21,6 +21,7 @@ type CycleParticipantRow = {
   attendance: AttendanceStatus
   reading: ReadingStatus
   responded_at: string | null
+  reading_description: string | null
   participants: ParticipantRow | null
 }
 
@@ -29,6 +30,7 @@ type CycleParticipantFlat = {
   attendance: AttendanceStatus
   reading: ReadingStatus
   responded_at: string | null
+  reading_description: string | null
 } & Partial<ParticipantRow>
 
 export async function GET(_req: Request, ctx: { params: Promise<Params> }) {
@@ -43,6 +45,7 @@ export async function GET(_req: Request, ctx: { params: Promise<Params> }) {
         attendance,
         reading,
         responded_at,
+        reading_description,
         participants:participant_id (
           id, name, email, phone_number, has_reading, created_at
         )
@@ -62,6 +65,7 @@ export async function GET(_req: Request, ctx: { params: Promise<Params> }) {
       attendance: row.attendance,
       reading: row.reading,
       responded_at: row.responded_at,
+      reading_description: row.reading_description,
       ...(row.participants ?? {}),
     }))
 

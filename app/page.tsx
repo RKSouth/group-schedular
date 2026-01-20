@@ -44,16 +44,32 @@ function asReadingStatus(v: unknown): ReadingStatus {
   return 'unassigned'
 }
 
+const STORAGE_KEY_SELECTED_ID = 'do-write-selected-participant-id'
+// character limit: change this number if you want (this is the only place)
+const READING_DESC_MAX = 280
+
 export default function Page() {
   const [cycleId, setCycleId] = useState<string | null>(null)
   const [roster, setRoster] = useState<CycleParticipant[]>([])
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
+  // flow state: user must pick name, then click button to proceed
+  const [hasProceeded, setHasProceeded] = useState(false)
+
+  // form state
+  const [attendanceChoice, setAttendanceChoice] = useState<'yes' | 'no' | 'maybe' | ''>('')
+  const [readerChoice, setReaderChoice] = useState<'confirmed' | 'deferred' | ''>('')
+  const [readingDescription, setReadingDescription] = useState('')
+
   const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  const selected = useMemo(() => roster.find(p => p.id === selectedId) ?? null, [roster, selectedId])
+  const selected = useMemo(
+    () => roster.find(p => p.id === selectedId) ?? null,
+    [roster, selectedId]
+  )
 
   // ✅ keep your existing grouping logic call
   const groups = useMemo(() => makeGroups(roster), [roster])
@@ -62,6 +78,11 @@ export default function Page() {
   const isUpNext =
     !!selected &&
     (groups.upNext?.table?.id === selected.id || groups.upNext?.lounge?.id === selected.id)
+
+  const isAttendingCounted = (p: CycleParticipant) => (p.attendance ?? 'unknown') !== 'no'
+
+  const shouldShowReaderForm = !!selected && isUpNext
+  const shouldShowNonReaderForm = !!selected && !isUpNext
 
   async function loadRoster() {
     try {
@@ -102,6 +123,7 @@ export default function Page() {
 
       if (selectedId !== null && !normalized.some(p => p.id === selectedId)) {
         setSelectedId(null)
+        setHasProceeded(false)
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Unknown error'
@@ -111,17 +133,122 @@ export default function Page() {
     }
   }
 
+  function persistSelectedId(id: number | null) {
+    try {
+      if (id === null) {
+        localStorage.removeItem(STORAGE_KEY_SELECTED_ID)
+      } else {
+        localStorage.setItem(STORAGE_KEY_SELECTED_ID, String(id))
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  // load once: roster + cached selection
   useEffect(() => {
+    // cached selection (optional)
+    try {
+      const cached = localStorage.getItem(STORAGE_KEY_SELECTED_ID)
+      if (cached) {
+        const n = Number(cached)
+        if (Number.isFinite(n)) setSelectedId(n)
+      }
+    } catch {
+      // ignore
+    }
+
     loadRoster()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ⬇️ IMPORTANT:
-  // Everything below is intentionally "boring": keep your existing layout/styles.
-  // If you already had a different layout, paste your old JSX back in here and keep ONLY:
-  // - the state/hooks above
-  // - the loadRoster() normalization fix
-  // - the isUpNext optional chaining fix
+  // if user changes selection, reset flow + form, and cache it
+  useEffect(() => {
+    persistSelectedId(selectedId)
+    setHasProceeded(false)
+    setAttendanceChoice('')
+    setReaderChoice('')
+    setReadingDescription('')
+  }, [selectedId])
+
+  async function patchCycleParticipant(
+    participantId: number,
+    patch: Record<string, unknown>
+  ) {
+    if (!cycleId) return
+
+    const res = await fetch(`/api/cycles/${cycleId}/participants/${participantId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    })
+
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || 'Failed to update')
+    }
+  }
+
+  async function handleSubmit() {
+    if (!selected) return
+    if (!cycleId) return
+
+    setError(null)
+    setSuccess(null)
+
+    // must pick attendance before submit
+    if (attendanceChoice !== 'yes' && attendanceChoice !== 'no' && attendanceChoice !== 'maybe') {
+      setError('Please select whether you are going.')
+      return
+    }
+
+    // if they are up next, they must confirm or defer
+    if (shouldShowReaderForm) {
+      if (readerChoice !== 'confirmed' && readerChoice !== 'deferred') {
+        setError('Please confirm or defer your reading.')
+        return
+      }
+    }
+
+    try {
+      setSubmitting(true)
+
+      const patch: Record<string, unknown> = {
+        attendance: attendanceChoice,
+      }
+
+      // Only include reading fields when they are up next
+      if (shouldShowReaderForm) {
+        patch.reading = readerChoice
+
+        // send description too (server can ignore if not stored yet)
+        patch.reading_description = readingDescription.slice(0, READING_DESC_MAX)
+      }
+
+      await patchCycleParticipant(selected.id, patch)
+
+      // refresh roster so the “who’s attending/reading” reflects immediately
+      await loadRoster()
+
+      setSuccess('Saved!')
+      window.alert('Saved! ✅')
+      setHasProceeded(false)
+      setAttendanceChoice('')
+      setReaderChoice('')
+      setReadingDescription('')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error'
+      setError(msg)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // “This only appears after they RSVP and are directed back”
+  // -> we show the roster lists when the selected person has a responded_at, OR after a save (success)
+  const selectedHasResponded = !!selected?.responded_at
+  const showFrontPageInfo = selectedHasResponded || !!success
+
   return (
     <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
       {/* top right admin button */}
@@ -147,7 +274,7 @@ export default function Page() {
               className="w-full rounded-md bg-white text-black px-2 py-2"
               value={selectedId ?? ''}
               onChange={e => setSelectedId(e.target.value ? Number(e.target.value) : null)}
-              disabled={loading}
+              disabled={loading || submitting}
             >
               <option value="">— Choose —</option>
               {roster.map(p => (
@@ -160,8 +287,16 @@ export default function Page() {
 
           <button
             className="self-start rounded-md bg-white px-3 py-2 text-black"
+            onClick={() => setHasProceeded(true)}
+            disabled={loading || submitting || !selected}
+          >
+            Continue
+          </button>
+
+          <button
+            className="mt-3 self-start rounded-md bg-white px-3 py-2 text-black"
             onClick={loadRoster}
-            disabled={loading}
+            disabled={loading || submitting}
           >
             {loading ? 'Loading…' : 'Refresh'}
           </button>
@@ -170,71 +305,178 @@ export default function Page() {
           {success && <p className="mt-3 text-green-700 bg-white/80 rounded p-2">{success}</p>}
         </div>
 
-        {/* RIGHT: what to do */}
+        {/* RIGHT: form + (after RSVP) front page info */}
         <div className="flex-1 flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
           <h2 className="font-bold text-black text-xl mb-2">This Week</h2>
 
-          <div className="bg-white/80 rounded-md p-3 text-black">
-            <div className="text-sm text-black/70 mb-2">
-              Attending this week: {roster.filter(p => (p.attendance ?? 'unknown') !== 'no').length} /{' '}
-              {roster.length}
-            </div>
-
-            <div className="font-semibold mb-2">Up Next</div>
-
-            <div className="text-sm">
-              <div>
-                <span className="font-medium">Table:</span>{' '}
-                {groups.upNext?.table?.name ?? 'No one up next.'}
-              </div>
-              <div>
-                <span className="font-medium">Lounge:</span>{' '}
-                {groups.upNext?.lounge?.name ?? 'No one up next.'}
-              </div>
-            </div>
-          </div>
-
-          {/* Only ask pages if they are up next */}
-          <div className="mt-4 bg-white/80 rounded-md p-3 text-black">
-            <div className="font-semibold mb-2">Your turn</div>
-
-            {!selected ? (
-              <div className="text-sm text-black/70">Pick your name first.</div>
-            ) : !isUpNext ? (
+          {!hasProceeded || !selected ? (
+            <div className="bg-white/80 rounded-md p-3 text-black">
               <div className="text-sm text-black/70">
-                You’re not up in the rotation right now. No action needed.
+                Select your name and click <span className="font-medium">Continue</span>.
               </div>
-            ) : (
-              <div className="text-sm">
-                <div className="mb-2">
-                  Hi <span className="font-semibold">{selected.name}</span> — are you able to read
-                  this week?
+            </div>
+          ) : (
+            <div className="bg-white/80 rounded-md p-3 text-black">
+              {/* name at top */}
+              <div className="font-semibold mb-2">{selected.name}</div>
+
+              {/* link to meet up + basic instructions */}
+              <div className="text-sm mb-3">
+                <div className="mb-1">
+                  <a href="#" className="underline">
+                    Meetup link
+                  </a>
                 </div>
+                <div>Instructions: Please RSVP below.</div>
+              </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className="rounded-md bg-white px-3 py-2 text-black border"
-                        onClick={loadRoster}
-                        disabled={loading}
-                  >
-                    Yes, I have pages
-                  </button>
+              {/* attendance radio */}
+              <div className="mb-3">
+                <div className="font-medium mb-1">Are you going?</div>
+                <label className="flex items-center gap-2 mb-1">
+                  <input
+                    type="radio"
+                    name="attendance"
+                    value="yes"
+                    checked={attendanceChoice === 'yes'}
+                    onChange={() => setAttendanceChoice('yes')}
+                    disabled={submitting}
+                  />
+                  Yes
+                </label>
+                <label className="flex items-center gap-2 mb-1">
+                  <input
+                    type="radio"
+                    name="attendance"
+                    value="no"
+                    checked={attendanceChoice === 'no'}
+                    onChange={() => setAttendanceChoice('no')}
+                    disabled={submitting}
+                  />
+                  No
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="attendance"
+                    value="maybe"
+                    checked={attendanceChoice === 'maybe'}
+                    onChange={() => setAttendanceChoice('maybe')}
+                    disabled={submitting}
+                  />
+                  Maybe
+                </label>
+              </div>
 
-                  <button
-                    className="rounded-md bg-white px-3 py-2 text-black border"
-                        onClick={loadRoster}
-                        disabled={loading}
-                  >
-                    No pages this week
-                  </button>
+              {/* reader form only when they are up next */}
+              {shouldShowReaderForm ? (
+                <>
+                  <hr className="my-3" />
+
+                  <div className="mb-2">
+                    <div className="font-medium">Reading</div>
+                    <div className="text-xs text-black/60">
+                      You are up next in the rotation.
+                    </div>
+                  </div>
+
+                  <div className="mb-3">
+                    <label className="flex items-center gap-2 mb-1">
+                      <input
+                        type="radio"
+                        name="reading"
+                        value="confirmed"
+                        checked={readerChoice === 'confirmed'}
+                        onChange={() => setReaderChoice('confirmed')}
+                        disabled={submitting}
+                      />
+                      Confirm
+                    </label>
+
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="reading"
+                        value="deferred"
+                        checked={readerChoice === 'deferred'}
+                        onChange={() => setReaderChoice('deferred')}
+                        disabled={submitting}
+                      />
+                      Defer
+                    </label>
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="font-medium mb-1">
+                      What are you reading?
+                    </div>
+                    <textarea
+                      className="w-full rounded-md bg-white text-black px-2 py-2"
+                      value={readingDescription}
+                      onChange={e => setReadingDescription(e.target.value.slice(0, READING_DESC_MAX))}
+                      maxLength={READING_DESC_MAX}
+                      rows={3}
+                      disabled={submitting}
+                    />
+                    <div className="text-xs text-black/60 mt-1">
+                      {readingDescription.length}/{READING_DESC_MAX}
+                    </div>
+                  </div>
+                </>
+              ) : null}
+
+              {/* non-reader form (up next only) — no extra fields */}
+              {shouldShowNonReaderForm ? null : null}
+
+              <button
+                className="rounded-md bg-white px-3 py-2 text-black"
+                onClick={handleSubmit}
+                disabled={submitting}
+              >
+                {submitting ? 'Submitting…' : 'Submit'}
+              </button>
+            </div>
+          )}
+
+          {/* front page info (only show after RSVP / redirected back) */}
+          {showFrontPageInfo ? (
+            <div className="mt-4 bg-white/80 rounded-md p-3 text-black">
+              <div className="text-sm text-black/70 mb-2">
+                Attending this week: {roster.filter(isAttendingCounted).length} / {roster.length}
+              </div>
+
+              <div className="font-semibold mb-2">Up Next</div>
+
+              <div className="text-sm mb-3">
+                <div>
+                  <span className="font-medium">Table:</span>{' '}
+                  {groups.upNext?.table?.name ?? 'No one up next.'}
                 </div>
-
-                <div className="mt-2 text-xs text-black/60">
-                  (This only appears when you’re up next.)
+                <div>
+                  <span className="font-medium">Lounge:</span>{' '}
+                  {groups.upNext?.lounge?.name ?? 'No one up next.'}
                 </div>
               </div>
-            )}
-          </div>
+
+              <div className="font-semibold mb-2">Confirmed attendees</div>
+              <ul className="list-disc ml-5 text-sm">
+                {roster
+                  .filter(p => p.attendance === 'yes')
+                  .map(p => (
+                    <li key={p.id}>{p.name}</li>
+                  ))}
+              </ul>
+
+              <div className="font-semibold mt-3 mb-2">Confirmed readers</div>
+              <ul className="list-disc ml-5 text-sm">
+                {roster
+                  .filter(p => p.reading === 'confirmed')
+                  .map(p => (
+                    <li key={p.id}>{p.name}</li>
+                  ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </div>
     </main>
