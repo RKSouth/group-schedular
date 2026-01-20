@@ -1,24 +1,22 @@
-// eslint.config.mjs
-import js from '@eslint/js'
-import next from '@next/eslint-plugin-next'
-import prettier from 'eslint-plugin-prettier'
+import next from "eslint-config-next";
+import prettierConfig from "eslint-config-prettier";
+import prettierPlugin from "eslint-plugin-prettier";
 
 export default [
-  js.configs.recommended,
+  // Next.js recommended rules
+  ...next(),
 
+  // Prettier integration:
+  // 1) turn off ESLint rules that fight Prettier
+  prettierConfig,
+
+  // 2) run Prettier as an ESLint rule (so ESLint "fix" formats your code)
   {
-    files: ['**/*.{js,jsx,ts,tsx}'],
     plugins: {
-      '@next/next': next,
-      prettier,
+      prettier: prettierPlugin
     },
     rules: {
-      // Next.js recommended rules
-      ...next.configs.recommended.rules,
-      ...next.configs['core-web-vitals'].rules,
-
-      // Run prettier as part of eslint
-      'prettier/prettier': 'warn',
-    },
-  },
-]
+      "prettier/prettier": "error"
+    }
+  }
+];
