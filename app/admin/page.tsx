@@ -531,100 +531,20 @@ const cycleByParticipantId = useMemo(() => {
                               >
                                 {person.name}
                               </button>
-                              <div className="text-xs text-gray-500">
-                                {person.email ?? '—'} • {formatPhone(person.phone_number)}
-                              </div>
                             </div>
 
                             <div className="flex flex-col items-end gap-1">
                               <div className="flex flex-wrap justify-end gap-2">
-                                <Badge text={a.text} tone={a.tone} />
+
                                 <Badge text={pages.text} tone={pages.tone} />
                               </div>
                               <div className="flex flex-wrap justify-end gap-2">
-                                <Badge text={r.text} tone={r.tone} />
+
                               </div>
                             </div>
                           </div>
 
-                          {openId === person.id && (
-                            <div className="mt-3 rounded-md border bg-white/60 p-3 text-sm text-gray-900">
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                <div>
-                                  <span className="font-medium">Email:</span> {person.email ?? '—'}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Cell:</span>{' '}
-                                  {formatPhone(person.phone_number)}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Attendance:</span>{' '}
-                                  {labelAttendance(person.attendance).text}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Reading status:</span>{' '}
-                                  {labelReading(person.reading).text}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Pages eligible:</span>{' '}
-                                  {person.has_reading ? 'Yes' : 'No'}
-                                </div>
-                                <div>
-                                  <span className="font-medium">Responded at:</span>{' '}
-                                  {person.responded_at ?? '—'}
-                                </div>
-                              </div>
-
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <button
-                                  className="rounded-md border bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { attendance: 'yes' })
-                                  }
-                                >
-                                  Mark attending
-                                </button>
-                                <button
-                                  className="rounded-md border bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { attendance: 'maybe' })
-                                  }
-                                >
-                                  Mark maybe
-                                </button>
-                                <button
-                                  className="rounded-md border bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { attendance: 'no' })
-                                  }
-                                >
-                                  Mark not attending
-                                </button>
-                                <button
-                                  className="rounded-md border bg-white px-2 py-1 text-xs"
-                                  onClick={() => patchCycleParticipant(person.id, { reading: 'pending' })}
-                                >
-                                  Set pending
-                                </button>
-                                <button
-                                  className="rounded-md border bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { reading: 'confirmed' })
-                                  }
-                                >
-                                  Confirm
-                                </button>
-                                <button
-                                  className="rounded-md border bg-white px-2 py-1 text-xs"
-                                  onClick={() =>
-                                    patchCycleParticipant(person.id, { reading: 'deferred' })
-                                  }
-                                >
-                                  Defer
-                                </button>
-                              </div>
-                            </div>
-                          )}
+                       
                         </li>
                       )
                     })}
