@@ -67,7 +67,7 @@ export default function Page() {
   const [success, setSuccess] = useState<string | null>(null)
 
   const selected = useMemo(
-    () => roster.find(p => p.id === selectedId) ?? null,
+    () => roster.find((p) => p.id === selectedId) ?? null,
     [roster, selectedId]
   )
 
@@ -105,7 +105,7 @@ export default function Page() {
       // ✅ This is the key fix: not unknown[]
       const raw = (await rosterRes.json()) as RosterApiRow[]
 
-      const normalized: CycleParticipant[] = (raw ?? []).map(r => ({
+      const normalized: CycleParticipant[] = (raw ?? []).map((r) => ({
         cycle_id: String(r.cycle_id ?? cycle.id),
 
         id: Number(r.id),
@@ -121,7 +121,7 @@ export default function Page() {
 
       setRoster(normalized)
 
-      if (selectedId !== null && !normalized.some(p => p.id === selectedId)) {
+      if (selectedId !== null && !normalized.some((p) => p.id === selectedId)) {
         setSelectedId(null)
         setHasProceeded(false)
       }
@@ -171,10 +171,7 @@ export default function Page() {
     setReadingDescription('')
   }, [selectedId])
 
-  async function patchCycleParticipant(
-    participantId: number,
-    patch: Record<string, unknown>
-  ) {
+  async function patchCycleParticipant(participantId: number, patch: Record<string, unknown>) {
     if (!cycleId) return
 
     const res = await fetch(`/api/cycles/${cycleId}/participants/${participantId}`, {
@@ -252,7 +249,10 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
       {/* top right admin button */}
-      <a href="/admin/login" className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1">
+      <a
+        href="/admin/login"
+        className="fixed top-4 right-4 rounded border text-black bg-white/80 px-3 py-1"
+      >
         Admin
       </a>
 
@@ -273,11 +273,11 @@ export default function Page() {
             <select
               className="w-full rounded-md bg-white text-black px-2 py-2"
               value={selectedId ?? ''}
-              onChange={e => setSelectedId(e.target.value ? Number(e.target.value) : null)}
+              onChange={(e) => setSelectedId(e.target.value ? Number(e.target.value) : null)}
               disabled={loading || submitting}
             >
               <option value="">— Choose —</option>
-              {roster.map(p => (
+              {roster.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
@@ -375,9 +375,7 @@ export default function Page() {
 
                   <div className="mb-2">
                     <div className="font-medium">Reading</div>
-                    <div className="text-xs text-black/60">
-                      You are up next in the rotation.
-                    </div>
+                    <div className="text-xs text-black/60">You are up next in the rotation.</div>
                   </div>
 
                   <div className="mb-3">
@@ -407,13 +405,13 @@ export default function Page() {
                   </div>
 
                   <div className="mb-3">
-                    <div className="font-medium mb-1">
-                      What are you reading?
-                    </div>
+                    <div className="font-medium mb-1">What are you reading?</div>
                     <textarea
                       className="w-full rounded-md bg-white text-black px-2 py-2"
                       value={readingDescription}
-                      onChange={e => setReadingDescription(e.target.value.slice(0, READING_DESC_MAX))}
+                      onChange={(e) =>
+                        setReadingDescription(e.target.value.slice(0, READING_DESC_MAX))
+                      }
                       maxLength={READING_DESC_MAX}
                       rows={3}
                       disabled={submitting}
@@ -461,8 +459,8 @@ export default function Page() {
               <div className="font-semibold mb-2">Confirmed attendees</div>
               <ul className="list-disc ml-5 text-sm">
                 {roster
-                  .filter(p => p.attendance === 'yes')
-                  .map(p => (
+                  .filter((p) => p.attendance === 'yes')
+                  .map((p) => (
                     <li key={p.id}>{p.name}</li>
                   ))}
               </ul>
@@ -470,8 +468,8 @@ export default function Page() {
               <div className="font-semibold mt-3 mb-2">Confirmed readers</div>
               <ul className="list-disc ml-5 text-sm">
                 {roster
-                  .filter(p => p.reading === 'confirmed')
-                  .map(p => (
+                  .filter((p) => p.reading === 'confirmed')
+                  .map((p) => (
                     <li key={p.id}>{p.name}</li>
                   ))}
               </ul>

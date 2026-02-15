@@ -44,7 +44,7 @@ export default function AdminLoginPage() {
         <label className="block text-sm mb-3">
           Username
           <input
-            className="mt-1 w-full rounded border p-2"
+            className="mt-1 w-full  text-black rounded border p-2"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
@@ -54,7 +54,7 @@ export default function AdminLoginPage() {
         <label className="block text-sm mb-4">
           Password
           <input
-            className="mt-1 w-full rounded border p-2"
+            className="mt-1 w-full  text-black rounded border p-2"
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
