@@ -418,7 +418,7 @@ export default function Page() {
                               maybe
                             </button>
                             <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                               onClick={() => patchCycleParticipant(person.id, { attendance: 'no' })}
                             >
                               No
@@ -519,6 +519,75 @@ export default function Page() {
                               <div className="flex flex-wrap justify-end gap-2"></div>
                             </div>
                           </div>
+                          {/* Details shown BELOW the name */}
+                          {openId === person.id && (
+                            <div className="mt-2 rounded-md p-3">
+                              <div className="text-xs text-white/80 mb-2">
+                                <div className="text-[1rem] text-black">
+                                  Email: {person.email ?? '—'}
+                                </div>
+                                <div className="text-[1rem] text-black">
+                                  Cell: {formatPhone(person.phone_number)}
+                                </div>
+                                <hr className="my-2 border-black/20" />
+
+                                <div>
+                                  <label className="text-[1rem] text-black">Attending</label>
+                                  <button
+                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                                    onClick={() =>
+                                      patchCycleParticipant(person.id, { attendance: 'yes' })
+                                    }
+                                  >
+                                    yes
+                                  </button>
+                                  <button
+                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                                    onClick={() =>
+                                      patchCycleParticipant(person.id, { attendance: 'maybe' })
+                                    }
+                                  >
+                                    maybe
+                                  </button>
+                                  <button
+                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                                    onClick={() =>
+                                      patchCycleParticipant(person.id, { attendance: 'no' })
+                                    }
+                                  >
+                                    No
+                                  </button>
+                                </div>
+                                <div>
+                                  <label className="text-[1rem] text-black">Reading</label>{' '}
+                                  <button
+                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                                    onClick={() =>
+                                      patchCycleParticipant(person.id, { reading: 'pending' })
+                                    }
+                                  >
+                                    Set pending
+                                  </button>
+                                  <button
+                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                                    onClick={() =>
+                                      patchCycleParticipant(person.id, { reading: 'confirmed' })
+                                    }
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button
+                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300"
+                                    onClick={() =>
+                                      patchCycleParticipant(person.id, { reading: 'deferred' })
+                                    }
+                                  >
+                                    Defer
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </li>
                       )
                     })}
