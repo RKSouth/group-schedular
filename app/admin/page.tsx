@@ -293,11 +293,12 @@ export default function Page() {
       <div className="flex flex-col sm:flex-row gap-4 items-stretch p-4">
         {/* LEFT: Folks */}
         <div className="flex-1 flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
-          <h2 className="font-bold text-black text-xl mb-2">Folks</h2>
-          <p className="text-sm text-black/80 mb-3">
+          <h2 className="font-bold text-black text-2xl mb-2">Folks</h2>
+          <p className="text-sm text-black/80">
             Add, update, or delete participants (master list).
           </p>
-
+          <hr className="my-2 border-black/20" />
+          <h3 className="font-semibold text-lg mb-2 text-white">Add Participant</h3>
           <div className="mb-3">
             <div className="mb-2">
               <label htmlFor="name" className="font-medium text-black">

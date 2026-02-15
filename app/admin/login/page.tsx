@@ -38,18 +38,15 @@ export default function AdminLoginPage() {
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm rounded-md border bg-white p-6 shadow"
-      >
-        <h1 className="text-xl font-semibold mb-4">Admin Login</h1>
+      <form onSubmit={onSubmit} className="w-full max-w-sm rounded-md border bg-white p-6 shadow">
+        <h1 className="text-xl text-black font-semibold mb-4">Admin Login</h1>
 
         <label className="block text-sm mb-3">
           Username
           <input
             className="mt-1 w-full rounded border p-2"
             value={username}
-            onChange={e => setUsername(e.target.value)}
+            onChange={(e) => setUsername(e.target.value)}
             autoComplete="username"
           />
         </label>
@@ -60,7 +57,7 @@ export default function AdminLoginPage() {
             className="mt-1 w-full rounded border p-2"
             type="password"
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
           />
         </label>
@@ -73,11 +70,7 @@ export default function AdminLoginPage() {
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
 
-        {error && (
-          <div className="mt-3 text-sm text-red-600">
-            {error}
-          </div>
-        )}
+        {error && <div className="mt-3 text-sm text-red-600">{error}</div>}
       </form>
     </main>
   )
