@@ -7,6 +7,7 @@ export default function AdminLoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -41,7 +42,7 @@ export default function AdminLoginPage() {
       <form onSubmit={onSubmit} className="w-full max-w-sm rounded-md border bg-white p-6 shadow">
         <h1 className="text-xl text-black font-semibold mb-4">Admin Login</h1>
 
-        <label className="block text-sm mb-3">
+        <label className="block text-black text-sm mb-3">
           Username
           <input
             className="mt-1 w-full  text-black rounded border p-2"
@@ -51,21 +52,28 @@ export default function AdminLoginPage() {
           />
         </label>
 
-        <label className="block text-sm mb-4">
+        <label className="block text-black text-sm mb-4">
           Password
           <input
-            className="mt-1 w-full  text-black rounded border p-2"
-            type="password"
+            className="mt-1 w-full text-black rounded border p-2"
+            type={showPassword ? 'text' : 'password'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="current-password"
           />
+          <button
+            type="button"
+            onClick={() => setShowPassword(!showPassword)}
+            style={{ marginLeft: '8px' }}
+          >
+            {showPassword ? 'Hide' : 'Show'}
+          </button>
         </label>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded bg-blue-600 text-white py-2 disabled:opacity-50"
+          className="w-full rounded bg-blue-600 text-black py-2 disabled:opacity-50"
         >
           {loading ? 'Signing in…' : 'Sign in'}
         </button>

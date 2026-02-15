@@ -342,16 +342,6 @@ export default function Page() {
               />
             </div>
 
-            <label className="block mb-2 text-black">
-              <input
-                type="checkbox"
-                checked={hasReading}
-                onChange={(e) => setHasReading(e.target.checked)}
-                className="mr-2"
-              />
-              Pages (eligible to read)
-            </label>
-
             <button
               className="rounded-md bg-white px-3 py-1 text-black"
               onClick={handleAdd}
@@ -391,7 +381,7 @@ export default function Page() {
 
                         <button
                           type="button"
-                          className="rounded-md bg-white px-2 py-1 text-black text-xs"
+                          className="rounded-md bg-white px-2 py-1 text-black text-xs hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                           onClick={() => deleteParticipant(person.id)}
                         >
                           Delete
@@ -412,7 +402,7 @@ export default function Page() {
                           <div>
                             <label className="text-[1rem] text-black">Attending</label>
                             <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                               onClick={() =>
                                 patchCycleParticipant(person.id, { attendance: 'yes' })
                               }
@@ -420,7 +410,7 @@ export default function Page() {
                               yes
                             </button>
                             <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                               onClick={() =>
                                 patchCycleParticipant(person.id, { attendance: 'maybe' })
                               }
@@ -437,7 +427,7 @@ export default function Page() {
                           <div>
                             <label className="text-[1rem] text-black">Reading</label>{' '}
                             <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                               onClick={() =>
                                 patchCycleParticipant(person.id, { reading: 'pending' })
                               }
@@ -445,7 +435,7 @@ export default function Page() {
                               Set pending
                             </button>
                             <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
                               onClick={() =>
                                 patchCycleParticipant(person.id, { reading: 'confirmed' })
                               }
@@ -453,7 +443,7 @@ export default function Page() {
                               Confirm
                             </button>
                             <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
+                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300"
                               onClick={() =>
                                 patchCycleParticipant(person.id, { reading: 'deferred' })
                               }
