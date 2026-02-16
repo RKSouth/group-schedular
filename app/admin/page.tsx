@@ -3,6 +3,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { makeGroups } from '../../lib/grouping'
+import { ParticipantDetails } from './participantDetails'
+import { basicButton, participantButton, seatingButton } from '../components/buttonStyles'
 
 type Participant = {
   id: number
@@ -343,7 +345,7 @@ export default function Page() {
             </div>
 
             <button
-              className="rounded-md bg-white px-3 py-1 text-black"
+              className={basicButton}
               onClick={handleAdd}
               disabled={isLoading || !name.trim()}
             >
@@ -371,7 +373,7 @@ export default function Page() {
                     <div className="flex items-start gap-3">
                       <button
                         type="button"
-                        className="min-w-0 flex-1 text-left text-xl font-semibold text-white"
+                        className={participantButton}
                         onClick={() => setOpenParticipantId(isOpen ? null : person.id)}
                       >
                         {person.name}
@@ -381,7 +383,7 @@ export default function Page() {
 
                         <button
                           type="button"
-                          className="rounded-md bg-white px-2 py-1 text-black text-xs hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
+                          className={basicButton}
                           onClick={() => deleteParticipant(person.id)}
                         >
                           Delete
@@ -391,68 +393,13 @@ export default function Page() {
 
                     {/* Details shown BELOW the name */}
                     {openParticipantId === person.id && (
-                      <div className="mt-2 rounded-md p-3">
-                        <div className="text-xs text-white/80 mb-2">
-                          <div className="text-[1rem] text-black">Email: {person.email ?? '—'}</div>
-                          <div className="text-[1rem] text-black">
-                            Cell: {formatPhone(person.phone_number)}
-                          </div>
-                          <hr className="my-2 border-black/20" />
-
-                          <div>
-                            <label className="text-[1rem] text-black">Attending</label>
-                            <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                              onClick={() =>
-                                patchCycleParticipant(person.id, { attendance: 'yes' })
-                              }
-                            >
-                              yes
-                            </button>
-                            <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                              onClick={() =>
-                                patchCycleParticipant(person.id, { attendance: 'maybe' })
-                              }
-                            >
-                              maybe
-                            </button>
-                            <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                              onClick={() => patchCycleParticipant(person.id, { attendance: 'no' })}
-                            >
-                              No
-                            </button>
-                          </div>
-                          <div>
-                            <label className="text-[1rem] text-black">Reading</label>{' '}
-                            <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                              onClick={() =>
-                                patchCycleParticipant(person.id, { reading: 'pending' })
-                              }
-                            >
-                              Set pending
-                            </button>
-                            <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                              onClick={() =>
-                                patchCycleParticipant(person.id, { reading: 'confirmed' })
-                              }
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300"
-                              onClick={() =>
-                                patchCycleParticipant(person.id, { reading: 'deferred' })
-                              }
-                            >
-                              Defer
-                            </button>
-                          </div>
-                        </div>
-                      </div>
+                      <ParticipantDetails
+                        person={person}
+                        onPatch={patchCycleParticipant}
+                        showAttendance={true}
+                        showReading={true}
+                        formatPhone={formatPhone}
+                      />
                     )}
                   </li>
                 )
@@ -505,7 +452,7 @@ export default function Page() {
                             <div className="min-w-0">
                               <button
                                 type="button"
-                                className="font-semibold text-gray-900 underline decoration-black/30 hover:decoration-black"
+                                className={seatingButton}
                                 onClick={() => setOpenId(openId === person.id ? null : person.id)}
                               >
                                 {person.name}
@@ -521,72 +468,13 @@ export default function Page() {
                           </div>
                           {/* Details shown BELOW the name */}
                           {openId === person.id && (
-                            <div className="mt-2 rounded-md p-3">
-                              <div className="text-xs text-white/80 mb-2">
-                                <div className="text-[1rem] text-black">
-                                  Email: {person.email ?? '—'}
-                                </div>
-                                <div className="text-[1rem] text-black">
-                                  Cell: {formatPhone(person.phone_number)}
-                                </div>
-                                <hr className="my-2 border-black/20" />
-
-                                <div>
-                                  <label className="text-[1rem] text-black">Attending</label>
-                                  <button
-                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                                    onClick={() =>
-                                      patchCycleParticipant(person.id, { attendance: 'yes' })
-                                    }
-                                  >
-                                    yes
-                                  </button>
-                                  <button
-                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                                    onClick={() =>
-                                      patchCycleParticipant(person.id, { attendance: 'maybe' })
-                                    }
-                                  >
-                                    maybe
-                                  </button>
-                                  <button
-                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md"
-                                    onClick={() =>
-                                      patchCycleParticipant(person.id, { attendance: 'no' })
-                                    }
-                                  >
-                                    No
-                                  </button>
-                                </div>
-                                <div>
-                                  <label className="text-[1rem] text-black">Reading</label>{' '}
-                                  <button
-                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                                    onClick={() =>
-                                      patchCycleParticipant(person.id, { reading: 'pending' })
-                                    }
-                                  >
-                                    Set pending
-                                  </button>
-                                  <button
-                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2"
-                                    onClick={() =>
-                                      patchCycleParticipant(person.id, { reading: 'confirmed' })
-                                    }
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button
-                                    className="rounded-md border-none text-black m-2 bg-white px-2 py-1 text-md hover:bg-gray-300"
-                                    onClick={() =>
-                                      patchCycleParticipant(person.id, { reading: 'deferred' })
-                                    }
-                                  >
-                                    Defer
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
+                            <ParticipantDetails
+                              person={person}
+                              onPatch={patchCycleParticipant}
+                              showAttendance={true}
+                              showReading={true}
+                              formatPhone={formatPhone}
+                            />
                           )}
                         </li>
                       )
@@ -633,6 +521,16 @@ export default function Page() {
                               <div className="flex flex-wrap justify-end gap-2"></div>
                             </div>
                           </div>
+                          {/* Details shown BELOW the name */}
+                          {openId === person.id && (
+                            <ParticipantDetails
+                              person={person}
+                              onPatch={patchCycleParticipant}
+                              showAttendance={true}
+                              showReading={true}
+                              formatPhone={formatPhone}
+                            />
+                          )}
                         </li>
                       )
                     })}
