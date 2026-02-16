@@ -91,6 +91,39 @@ function formatPhone(phone: string | null | undefined) {
   return phone
 }
 
+/* -------------------------
+   Reader schedule helpers (UI only)
+-------------------------- */
+
+function firstNameKey(fullName: string) {
+  const trimmed = (fullName ?? '').trim().toLowerCase()
+  if (!trimmed) return { first: '', full: '' }
+  const first = trimmed.split(/\s+/)[0] ?? ''
+  return { first, full: trimmed }
+}
+
+function sortByFirstName<T extends { id: number; name: string }>(arr: T[]): T[] {
+  return [...arr].sort((a, b) => {
+    const ka = firstNameKey(a.name)
+    const kb = firstNameKey(b.name)
+    if (ka.first !== kb.first) return ka.first.localeCompare(kb.first)
+    const fullCmp = ka.full.localeCompare(kb.full)
+    if (fullCmp !== 0) return fullCmp
+    return a.id - b.id
+  })
+}
+
+function takeWithWrap<T>(list: T[], startIndex: number, count: number): T[] {
+  const n = list.length
+  if (n === 0 || count <= 0) return []
+  const start = ((startIndex % n) + n) % n
+  const out: T[] = []
+  for (let i = 0; i < count && out.length < n; i++) {
+    out.push(list[(start + i) % n])
+  }
+  return out
+}
+
 export default function Page() {
   // LEFT COLUMN: master participants list (CRUD)
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -126,6 +159,32 @@ export default function Page() {
     for (const person of cycleParticipants) map.set(person.id, person)
     return map
   }, [cycleParticipants])
+
+  // ---------
+  // Reader schedule view-model (derived; no JSX functions)
+  const readerSchedule = useMemo(() => {
+    const combined = sortByFirstName([...groups.rosters.table, ...groups.rosters.lounge])
+
+    const start = groups.rosters.startIndex?.tableStartIndex ?? 0
+
+    const THIS_WEEK_COUNT = 6
+    const MAIN_COUNT = 4
+
+    const thisWeekAll = takeWithWrap(combined, start, THIS_WEEK_COUNT)
+    const nextWeekAll = takeWithWrap(combined, start + THIS_WEEK_COUNT, THIS_WEEK_COUNT)
+
+    return {
+      all: combined,
+      thisWeek: {
+        main: thisWeekAll.slice(0, MAIN_COUNT),
+        bonus: thisWeekAll.slice(MAIN_COUNT),
+      },
+      nextWeek: {
+        main: nextWeekAll.slice(0, MAIN_COUNT),
+        bonus: nextWeekAll.slice(MAIN_COUNT),
+      },
+    }
+  }, [groups.rosters.table, groups.rosters.lounge, groups.rosters.startIndex])
 
   // ---------
   // CRUD: master participants
@@ -540,94 +599,123 @@ export default function Page() {
             </div>
           </div>
 
-          {/* Reader Schedule */}
-          <div>
+          {/* Reader Schedule (UPDATED ONLY) */}
+          <div className="flex-1 flex flex-col p-4 bg-white/85 rounded-md">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Reader Schedule</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="gap-4">
+              {/* Up this week + up next week */}
               <div className="rounded-xl border bg-white p-3">
-                <div className="font-semibold text-gray-900 mb-2">Table</div>
+                <div className="font-semibold text-gray-900 mb-2">Up this week</div>
 
-                <div className="mb-3">
-                  <div className="text-sm font-medium text-gray-800 mb-1">Scheduled</div>
-                  {groups.readers.table.scheduled.length === 0 ? (
-                    <div className="text-sm text-gray-600">No scheduled readers.</div>
-                  ) : (
-                    <ul className="flex flex-col gap-1">
-                      {groups.readers.table.scheduled.map((person) => {
-                        const rs = labelReading(person.reading)
-                        return (
-                          <li key={person.id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-900">{person.name}</span>
+                {readerSchedule.thisWeek.main.length + readerSchedule.thisWeek.bonus.length ===
+                0 ? (
+                  <div className="text-sm text-gray-600">No eligible readers.</div>
+                ) : (
+                  <ul className="flex flex-col gap-1">
+                    {readerSchedule.thisWeek.main.map((person) => {
+                      const rs = labelReading(person.reading)
+                      return (
+                        <li
+                          key={`this-main-${person.id}`}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <button
+                            type="button"
+                            className="text-gray-900 underline decoration-black/30 hover:decoration-black"
+                            onClick={() => setOpenId(openId === person.id ? null : person.id)}
+                          >
+                            {person.name}
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <Badge text="Main" tone="warn" />
                             <Badge text={rs.text} tone={rs.tone} />
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                </div>
+                          </div>
+                        </li>
+                      )
+                    })}
 
-                <div>
-                  <div className="text-sm font-medium text-gray-800 mb-1">Bonus</div>
-                  {groups.readers.table.bonus.length === 0 ? (
-                    <div className="text-sm text-gray-600">No bonus readers.</div>
-                  ) : (
-                    <ul className="flex flex-col gap-1">
-                      {groups.readers.table.bonus.map((person) => {
-                        const rs = labelReading(person.reading)
-                        return (
-                          <li key={person.id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-900">{person.name}</span>
+                    {readerSchedule.thisWeek.bonus.map((person) => {
+                      const rs = labelReading(person.reading)
+                      return (
+                        <li
+                          key={`this-bonus-${person.id}`}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <button
+                            type="button"
+                            className="text-gray-900 underline decoration-black/30 hover:decoration-black"
+                            onClick={() => setOpenId(openId === person.id ? null : person.id)}
+                          >
+                            {person.name}
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <Badge text="Bonus" tone="neutral" />
                             <Badge text={rs.text} tone={rs.tone} />
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                </div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+
+                <hr className="my-3 border-black/10" />
+
+                <div className="font-semibold text-gray-900 mb-2">Up next week</div>
+
+                {readerSchedule.nextWeek.main.length + readerSchedule.nextWeek.bonus.length ===
+                0 ? (
+                  <div className="text-sm text-gray-600">No eligible readers.</div>
+                ) : (
+                  <ul className="flex flex-col gap-1">
+                    {readerSchedule.nextWeek.main.map((person) => {
+                      const rs = labelReading(person.reading)
+                      return (
+                        <li
+                          key={`next-main-${person.id}`}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <button
+                            type="button"
+                            className="text-gray-900 underline decoration-black/30 hover:decoration-black"
+                            onClick={() => setOpenId(openId === person.id ? null : person.id)}
+                          >
+                            {person.name}
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <Badge text="Main" tone="warn" />
+                            <Badge text={rs.text} tone={rs.tone} />
+                          </div>
+                        </li>
+                      )
+                    })}
+
+                    {readerSchedule.nextWeek.bonus.map((person) => {
+                      const rs = labelReading(person.reading)
+                      return (
+                        <li
+                          key={`next-bonus-${person.id}`}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <button
+                            type="button"
+                            className="text-gray-900 underline decoration-black/30 hover:decoration-black"
+                            onClick={() => setOpenId(openId === person.id ? null : person.id)}
+                          >
+                            {person.name}
+                          </button>
+                          <div className="flex items-center gap-2">
+                            <Badge text="Bonus" tone="neutral" />
+                            <Badge text={rs.text} tone={rs.tone} />
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
               </div>
 
-              <div className="rounded-xl border bg-white p-3">
-                <div className="font-semibold text-gray-900 mb-2">Lounge</div>
-
-                <div className="mb-3">
-                  <div className="text-sm font-medium text-gray-800 mb-1">Scheduled</div>
-                  {groups.readers.lounge.scheduled.length === 0 ? (
-                    <div className="text-sm text-gray-600">No scheduled readers.</div>
-                  ) : (
-                    <ul className="flex flex-col gap-1">
-                      {groups.readers.lounge.scheduled.map((person) => {
-                        const rs = labelReading(person.reading)
-                        return (
-                          <li key={person.id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-900">{person.name}</span>
-                            <Badge text={rs.text} tone={rs.tone} />
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                </div>
-
-                <div>
-                  <div className="text-sm font-medium text-gray-800 mb-1">Bonus</div>
-                  {groups.readers.lounge.bonus.length === 0 ? (
-                    <div className="text-sm text-gray-600">No bonus readers.</div>
-                  ) : (
-                    <ul className="flex flex-col gap-1">
-                      {groups.readers.lounge.bonus.map((person) => {
-                        const rs = labelReading(person.reading)
-                        return (
-                          <li key={person.id} className="flex items-center justify-between text-sm">
-                            <span className="text-gray-900">{person.name}</span>
-                            <Badge text={rs.text} tone={rs.tone} />
-                          </li>
-                        )
-                      })}
-                    </ul>
-                  )}
-                </div>
-              </div>
+              {/* Full roster list */}
             </div>
           </div>
 
