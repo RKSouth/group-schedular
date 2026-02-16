@@ -296,15 +296,15 @@ export default function Page() {
           <h1 className="text-gray-900 text-[2.5rem] sm:text-[3rem] font-bold">
             Do Write Scheduler
           </h1>
-
+          <img src="/Dudley_Do-Right.png" alt="Villain" className="mx-auto h-33 w-31" />
           {/* BIG SPINNING LOBSTER BELOW TITLE */}
-          <div
+          {/* <div
             className="mt-3 text-7xl sm:text-8xl animate-spin"
             style={{ animationDuration: '4s' }}
             aria-hidden="true"
           >
             🦞
-          </div>
+          </div> */}
 
           <div className="mt-3 text-sm text-black/80">
             Next Meeting: <span className="font-semibold">{meetingDateLabel} at 10:30 am</span>
