@@ -125,6 +125,8 @@ function takeWithWrap<T>(list: T[], startIndex: number, count: number): T[] {
   return out
 }
 
+const READING_DESC_MAX = 300
+
 export default function Page() {
   // LEFT COLUMN: master participants list (CRUD)
   const [participants, setParticipants] = useState<Participant[]>([])
@@ -145,8 +147,30 @@ export default function Page() {
   // click-to-expand on master participant list (left side)
   const [openParticipantId, setOpenParticipantId] = useState<number | null>(null)
 
-  //view reader details
+  // view reader details (shows summary text)
   const [viewReaderDetails, setViewReaderDetails] = useState<CycleParticipant | null>(null)
+
+  // --- Admin Summary Editor (matches front page behavior, precise names)
+  const [summaryEditorParticipantId, setSummaryEditorParticipantId] = useState<number | null>(null)
+  const [summaryEditorText, setSummaryEditorText] = useState('')
+  const [summaryEditorSubmitting, setSummaryEditorSubmitting] = useState(false)
+  const [summaryEditorError, setSummaryEditorError] = useState<string | null>(null)
+  const [summaryEditorSuccess, setSummaryEditorSuccess] = useState<string | null>(null)
+
+  const summaryEditorPerson = useMemo(() => {
+    if (summaryEditorParticipantId === null) return null
+    return cycleParticipants.find((p) => p.id === summaryEditorParticipantId) ?? null
+  }, [summaryEditorParticipantId, cycleParticipants])
+
+  const meetingDateLabel = useMemo(() => {
+    const d = nextTuesdayDate(new Date())
+    return formatMeetingDate(d)
+  }, [])
+  // prefill editor when you open it (same as front page)
+  useEffect(() => {
+    if (!summaryEditorPerson) return
+    setSummaryEditorText((summaryEditorPerson.reading_description ?? '').slice(0, READING_DESC_MAX))
+  }, [summaryEditorPerson])
 
   const seatedParticipants = useMemo(() => {
     return cycleParticipants.filter((person) => (person.attendance ?? 'unknown') === 'yes')
@@ -277,8 +301,24 @@ export default function Page() {
     await loadParticipants()
     await loadCycleRoster()
   }
+  function nextTuesdayDate(from: Date): Date {
+    // JS: 0=Sun ... 2=Tue ... 6=Sat
+    const day = from.getDay()
+    const daysUntilTue = (2 - day + 7) % 7
+    const add = daysUntilTue === 0 ? 7 : daysUntilTue // “next Tuesday”, not “today if Tuesday”
+    const d = new Date(from)
+    d.setDate(from.getDate() + add)
+    d.setHours(0, 0, 0, 0)
+    return d
+  }
 
-  // ---------
+  function formatMeetingDate(d: Date): string {
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(d)
+  }
   // Weekly cycle roster
   async function loadCycleRoster() {
     try {
@@ -305,13 +345,22 @@ export default function Page() {
         setCycleError('Failed to load cycle roster')
         return
       }
+
       const roster = (await rosterRes.json()) as CycleParticipant[]
       setCycleParticipants(roster)
-      console.log('ADMIN ROSTER RAW:', roster[2].reading_description)
 
       // If the open person disappeared, close the panel
       if (openId !== null && !roster.some((person) => person.id === openId)) {
         setOpenId(null)
+      }
+
+      // If summary editor was open for someone who disappeared, close it
+      if (
+        summaryEditorParticipantId !== null &&
+        !roster.some((p) => p.id === summaryEditorParticipantId)
+      ) {
+        setSummaryEditorParticipantId(null)
+        setSummaryEditorText('')
       }
     } catch (err) {
       console.error('Error loading cycle roster:', err)
@@ -321,7 +370,7 @@ export default function Page() {
 
   async function patchCycleParticipant(
     participantId: number,
-    patch: Partial<Pick<CycleParticipant, 'attendance' | 'reading'>>
+    patch: Partial<Pick<CycleParticipant, 'attendance' | 'reading' | 'reading_description'>>
   ) {
     if (!cycleId) return
 
@@ -340,6 +389,36 @@ export default function Page() {
     await loadCycleRoster()
   }
 
+  async function handleSubmitSummaryEditor() {
+    if (!summaryEditorPerson) return
+    if (!cycleId) return
+
+    setSummaryEditorError(null)
+    setSummaryEditorSuccess(null)
+
+    try {
+      setSummaryEditorSubmitting(true)
+
+      const trimmed = summaryEditorText.trim().slice(0, READING_DESC_MAX)
+
+      await patchCycleParticipant(summaryEditorPerson.id, {
+        reading_description: trimmed.length ? trimmed : null,
+      })
+
+      setSummaryEditorSuccess('Saved!')
+      window.alert('Saved! ✅')
+
+      // optional: close editor after save
+      setSummaryEditorParticipantId(null)
+      setSummaryEditorText('')
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error'
+      setSummaryEditorError(msg)
+    } finally {
+      setSummaryEditorSubmitting(false)
+    }
+  }
+
   useEffect(() => {
     loadParticipants()
     loadCycleRoster()
@@ -348,26 +427,52 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
-      <button
-        className="fixed top-4 right-4 rounded  text-black border bg-white/80 px-3 py-1"
-        onClick={logout}
-      >
-        Logout
-      </button>
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b bg-gradient-to-r from-slate-100/90 via-white/75 to-slate-100/90 backdrop-blur">
+        <div className="mx-auto max-w-6xl px-4 py-4 sm:py-6">
+          <div className="flex items-center justify-between gap-3">
+            {/* Left: mascot + title */}
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="grid h-16 w-16 place-items-center rounded-2xl border bg-red-500 shadow-sm">
+                <img src="/snidely3.png" alt="Villain" className="h-11 w-11" />
+              </div>
 
-      <h1 className="pt-10 text-gray-900 text-[3rem] font-bold flex items-center justify-center mb-4 mx-4">
-        Administrator Page
-      </h1>
+              <div className="min-w-0">
+                <h1 className="truncate text-2xl sm:text-3xl font-extrabold text-slate-900">
+                  Administration
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-600">
+                  Manage people, seating, and reader summaries
+                </p>
+              </div>
+            </div>
+
+            {/* Right: logout */}
+            <button
+              onClick={logout}
+              className="rounded-xl border bg-white/80 px-3 py-2 text-lg mt-[-1rem] mr-[-10rem]  shadow-md font-semibold text-slate-900 border-none hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </header>
 
       <div className="flex flex-col sm:flex-row gap-4 items-stretch p-4">
         {/* LEFT: Folks */}
-        <div className="flex-1 flex flex-col p-4 bg-gray-400 text-gray-50 rounded-md">
-          <h2 className="font-bold text-black text-2xl mb-2">Folks</h2>
+        <div className="flex-1 flex flex-col p-4 bg-gray-300/90 text-gray-50 rounded-md">
+          <h2 className="font-bold text-black text-3xl mb-2">
+            {' '}
+            <span className="mt-3 mr-3 text-3xl sm:text-1xl" aria-hidden="true">
+              🦞
+            </span>
+            Folks
+          </h2>
           <p className="text-sm text-black/80">
             Add, update, or delete participants (master list).
           </p>
           <hr className="my-2 border-black/20" />
-          <h3 className="font-semibold text-lg mb-2 text-white">Add Participant</h3>
+          <h3 className="font-bold text-lg mb-2 text-gray-600">Add Participant</h3>
           <div className="mb-3">
             <div className="mb-2">
               <label htmlFor="name" className="font-medium text-black">
@@ -418,14 +523,13 @@ export default function Page() {
             >
               {isLoading ? 'Adding…' : 'Add'}
             </button>
-          </div>
-
-          <hr className="my-2 border-black/20" />
-
-          <h3 className="font-semibold text-lg mb-2 text-white">
+          </div>{' '}
+          <span className="mt-3 mr-3 text-3xl sm:text-1xl" aria-hidden="true">
+            🦞
+          </span>
+          <h3 className="font-semibold text-lg mb-2 text-gray-600">
             All participants ({participants.length})
           </h3>
-
           {participants.length === 0 ? (
             <p className="text-white/90">No one yet.</p>
           ) : (
@@ -436,7 +540,7 @@ export default function Page() {
                 const going = labelAttendance(cycleInfo?.attendance)
 
                 return (
-                  <li key={person.id} className="rounded-md p-3 text-sm bg-white/10">
+                  <li key={person.id} className="rounded-md p-3 text-sm bg-gray-500/35">
                     <div className="flex items-start gap-3">
                       <button
                         type="button"
@@ -445,6 +549,7 @@ export default function Page() {
                       >
                         {person.name}
                       </button>
+
                       <div className="flex items-center gap-3 ml-auto">
                         <Badge text={going.text} tone={going.tone} />
 
@@ -478,8 +583,10 @@ export default function Page() {
         {/* RIGHT: This Week */}
         <div className="flex-1 flex flex-col p-4 bg-white/85 rounded-md">
           <div className="mb-3">
-            <h2 className="text-2xl font-bold text-gray-900">This Week</h2>
-            {cycleId && <div className="text-xs text-gray-600">Cycle: {cycleId}</div>}
+            <h2 className="text-3xl font-bold text-gray-900">This Week</h2>
+            <div className="mt-3 text-sm text-black/80">
+              Meeting: <span className="font-semibold">{meetingDateLabel}</span>
+            </div>
             <div className="text-sm text-gray-700 mt-1">
               Attending: <span className="font-semibold">{attendingCount}</span> /{' '}
               {cycleParticipants.length}{' '}
@@ -489,7 +596,7 @@ export default function Page() {
 
           {cycleError && <p className="text-red-600 mb-3">{cycleError}</p>}
           {groups.error && <p className="text-red-600 mb-3">{groups.error}</p>}
-
+          <hr className="my-2 border-black/20" />
           {/* Seating */}
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Seating</h3>
@@ -507,11 +614,9 @@ export default function Page() {
                 ) : (
                   <ul className="flex flex-col gap-2">
                     {groups.table.map((person) => {
-                      const a = labelAttendance(person.attendance)
                       const pages = person.has_reading
                         ? { text: 'Has pages', tone: 'good' as const }
                         : { text: 'No pages', tone: 'neutral' as const }
-                      const r = labelReading(person.reading)
 
                       return (
                         <li key={person.id} className="rounded-lg border bg-white p-3">
@@ -530,10 +635,9 @@ export default function Page() {
                               <div className="flex flex-wrap justify-end gap-2">
                                 <Badge text={pages.text} tone={pages.tone} />
                               </div>
-                              <div className="flex flex-wrap justify-end gap-2"></div>
                             </div>
                           </div>
-                          {/* Details shown BELOW the name */}
+
                           {openId === person.id && (
                             <ParticipantDetails
                               person={person}
@@ -562,11 +666,9 @@ export default function Page() {
                 ) : (
                   <ul className="flex flex-col gap-2">
                     {groups.lounge.map((person) => {
-                      const a = labelAttendance(person.attendance)
                       const pages = person.has_reading
                         ? { text: 'Has pages', tone: 'good' as const }
                         : { text: 'No pages', tone: 'neutral' as const }
-                      const r = labelReading(person.reading)
 
                       return (
                         <li key={person.id} className="rounded-lg border bg-white p-3">
@@ -585,10 +687,9 @@ export default function Page() {
                               <div className="flex flex-wrap justify-end gap-2">
                                 <Badge text={pages.text} tone={pages.tone} />
                               </div>
-                              <div className="flex flex-wrap justify-end gap-2"></div>
                             </div>
                           </div>
-                          {/* Details shown BELOW the name */}
+
                           {openId === person.id && (
                             <ParticipantDetails
                               person={person}
@@ -610,88 +711,117 @@ export default function Page() {
           {/* Reader Schedule */}
           <div className="flex-1 flex flex-col p-4 bg-white/85 rounded-md">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Reader Schedule</h3>
+
             <div className="gap-4">
-              {/* Up this week + up next week */}
               <div className="rounded-xl border bg-white p-3">
                 <div className="font-semibold text-gray-900 mb-2">Up this week</div>
+
                 {readerSchedule.thisWeek.main.length + readerSchedule.thisWeek.bonus.length ===
                 0 ? (
                   <div className="text-sm text-gray-600">No eligible readers.</div>
                 ) : (
                   <ul className="flex flex-col gap-2">
-                    {readerSchedule.thisWeek.main.map((person) => {
-                      const rs = labelReading(person.reading)
-                      const cycleInfo = cycleByParticipantId.get(person.id)
-                      return (
-                        <li
-                          key={`this-main-${person.id}`}
-                          className="rounded-lg border bg-white p-3"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <button
-                              type="button"
-                              className={seatingButton}
-                              onClick={() =>
-                                setViewReaderDetails(
-                                  viewReaderDetails?.id === person.id
-                                    ? null
-                                    : (cycleByParticipantId.get(person.id) ?? null)
-                                )
-                              }
-                            >
-                              {person.name}
-                            </button>
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex items-center gap-2">
-                                <Badge text={rs.text} tone={rs.tone} />
-                              </div>
-                            </div>
-                          </div>
-                          {viewReaderDetails?.id === person.id && (
-                            <p className="text-sm text-gray-600">
-                              Summary: {cycleInfo?.reading_description ?? 'none yet'}
-                            </p>
-                          )}
-                        </li>
-                      )
-                    })}
+                    {[...readerSchedule.thisWeek.main, ...readerSchedule.thisWeek.bonus].map(
+                      (person) => {
+                        const rs = labelReading(person.reading)
+                        const cycleInfo = cycleByParticipantId.get(person.id)
+                        const isOpen = viewReaderDetails?.id === person.id
+                        const isEditing = summaryEditorParticipantId === person.id
 
-                    {readerSchedule.thisWeek.bonus.map((person) => {
-                      const rs = labelReading(person.reading)
-                      const cycleInfo = cycleByParticipantId.get(person.id)
-                      return (
-                        <li
-                          key={`this-main-${person.id}`}
-                          className="rounded-lg border bg-white p-3"
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <button
-                              type="button"
-                              className={seatingButton}
-                              onClick={() =>
-                                setViewReaderDetails(
-                                  viewReaderDetails?.id === person.id
-                                    ? null
-                                    : (cycleByParticipantId.get(person.id) ?? null)
-                                )
-                              }
-                            >
-                              {person.name}
-                            </button>
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex items-center gap-2">
-                                <Badge text={rs.text} tone={rs.tone} />
+                        return (
+                          <li
+                            key={`this-week-${person.id}`}
+                            className="rounded-lg border bg-white p-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <button
+                                type="button"
+                                className={seatingButton}
+                                onClick={() =>
+                                  setViewReaderDetails(
+                                    isOpen ? null : (cycleByParticipantId.get(person.id) ?? null)
+                                  )
+                                }
+                              >
+                                {person.name}
+                              </button>
+
+                              <div className="flex flex-col items-end gap-1">
+                                <div className="flex items-center gap-2">
+                                  <Badge text={rs.text} tone={rs.tone} />
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          {viewReaderDetails?.id === person.id && (
-                            <p className="text-sm text-gray-600">
-                              Summary: {cycleInfo?.reading_description ?? 'none yet'}
-                            </p>
-                          )}
-                        </li>
-                      )
-                    })}
+
+                            {isOpen && (
+                              <div className="mt-2">
+                                <p className="text-sm text-gray-600">
+                                  Summary: {cycleInfo?.reading_description ?? 'none yet'}
+                                </p>
+
+                                <div className="mt-2">
+                                  <button
+                                    type="button"
+                                    className={basicButton}
+                                    onClick={() => {
+                                      setSummaryEditorError(null)
+                                      setSummaryEditorSuccess(null)
+                                      setSummaryEditorParticipantId((prev) =>
+                                        prev === person.id ? null : person.id
+                                      )
+                                    }}
+                                  >
+                                    {isEditing ? 'Close' : 'Add Summary'}
+                                  </button>
+
+                                  {isEditing && (
+                                    <div className="mt-2">
+                                      <textarea
+                                        className="w-full rounded-md bg-white text-black px-3 py-2 border"
+                                        value={summaryEditorText}
+                                        onChange={(e) =>
+                                          setSummaryEditorText(
+                                            e.target.value.slice(0, READING_DESC_MAX)
+                                          )
+                                        }
+                                        maxLength={READING_DESC_MAX}
+                                        rows={3}
+                                        disabled={summaryEditorSubmitting}
+                                      />
+
+                                      <div className="text-xs text-gray-500 mt-1">
+                                        {summaryEditorText.length}/{READING_DESC_MAX}
+                                      </div>
+
+                                      {summaryEditorError && (
+                                        <p className="mt-2 text-sm text-red-700 bg-red-50 rounded p-2 border">
+                                          {summaryEditorError}
+                                        </p>
+                                      )}
+                                      {summaryEditorSuccess && (
+                                        <p className="mt-2 text-sm text-green-700 bg-green-50 rounded p-2 border">
+                                          {summaryEditorSuccess}
+                                        </p>
+                                      )}
+
+                                      <div className="mt-2 flex gap-2">
+                                        <button
+                                          className="rounded-md bg-black/90 px-4 py-2 text-white"
+                                          onClick={handleSubmitSummaryEditor}
+                                          disabled={summaryEditorSubmitting}
+                                        >
+                                          {summaryEditorSubmitting ? 'Submitting…' : 'Submit'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </li>
+                        )
+                      }
+                    )}
                   </ul>
                 )}
 
@@ -719,7 +849,6 @@ export default function Page() {
                             {person.name}
                           </button>
                           <div className="flex items-center gap-2">
-                            <Badge text="Main" tone="warn" />
                             <Badge text={rs.text} tone={rs.tone} />
                           </div>
                         </li>
@@ -749,8 +878,6 @@ export default function Page() {
                   </ul>
                 )}
               </div>
-
-              {/* Full roster list */}
             </div>
           </div>
 

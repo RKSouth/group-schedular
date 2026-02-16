@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { makeGroups } from '../lib/grouping'
+import { basicButton, participantButton, seatingButton } from './components/buttonStyles'
 
 type AttendanceStatus = 'unknown' | 'yes' | 'no' | 'maybe'
 type ReadingStatus = 'unassigned' | 'pending' | 'confirmed' | 'deferred'
@@ -12,7 +13,6 @@ type CycleParticipant = {
   reading: ReadingStatus
   responded_at: string | null
   reading_description: string | null
-
   id: number
   name: string
   email: string | null
@@ -107,7 +107,7 @@ export default function Page() {
     return formatMeetingDate(d)
   }, [])
 
-  async function loadRoster() {
+  async function loadCycleRoster() {
     try {
       setLoading(true)
       setError(null)
@@ -140,7 +140,6 @@ export default function Page() {
         reading: asReadingStatus(r.reading),
         responded_at: typeof r.responded_at === 'string' ? r.responded_at : null,
 
-        // ✅ actually store it
         reading_description: asReadingDescription(r.reading_description),
       }))
 
@@ -179,7 +178,7 @@ export default function Page() {
       // ignore
     }
 
-    loadRoster()
+    loadCycleRoster()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -245,7 +244,7 @@ export default function Page() {
       }
 
       await patchCycleParticipant(selected.id, patch)
-      await loadRoster()
+      await loadCycleRoster()
 
       setSuccess('Saved!')
       window.alert('Saved! ✅')
@@ -287,12 +286,12 @@ export default function Page() {
     <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
       <a
         href="/admin/login"
-        className="fixed top-4 right-4 rounded border text-black bg-white/80 px-3 py-1"
+        className="fixed top-4 right-4 rounded border text-black bg-white/80 px-3 py-1 shadow-md font-semibold text-slate-900 border-none hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 transition"
       >
         Admin
       </a>
-
-      <div className="mx-auto w-full max-w-2xl px-6 sm:px-12 py-10">
+      <div className="h-26" /> {/* for spacing below fixed admin link */}
+      <div className="mx-auto w-full bg-gray-300/85 rounded-md max-w-2xl px-6 sm:px-12 py-10">
         <div className="mb-5 text-center">
           <h1 className="text-gray-900 text-[2.5rem] sm:text-[3rem] font-bold">
             Do Write Scheduler
@@ -308,10 +307,9 @@ export default function Page() {
           </div>
 
           <div className="mt-3 text-sm text-black/80">
-            Meeting: <span className="font-semibold">{meetingDateLabel}</span>
+            Next Meeting: <span className="font-semibold">{meetingDateLabel} at 10:30 am</span>
           </div>
-
-          {cycleId && <div className="mt-1 text-xs text-black/60">Cycle code: {cycleId}</div>}
+          <div className="mt-3 text-sm text-black/80">Don't be late!</div>
         </div>
 
         <div className="rounded-2xl bg-white/85 border shadow-sm p-5 sm:p-6">
@@ -334,7 +332,7 @@ export default function Page() {
 
             <div className="mt-3 flex flex-wrap gap-2 justify-center">
               <button
-                className="rounded-md bg-black/90 px-4 py-2 text-white"
+                className="rounded-md bg-gray-500/85 px-4 py-2 text-white shadow-md hover:bg-gray-200/90 disabled:bg-gray-400 disabled:text-gray-700 hover:text-gray-900 disabled:hover:bg-gray-400"
                 onClick={() => setHasProceeded(true)}
                 disabled={loading || submitting || !selected}
               >
@@ -342,8 +340,8 @@ export default function Page() {
               </button>
 
               <button
-                className="rounded-md bg-white px-4 py-2 text-black border"
-                onClick={loadRoster}
+                className="rounded-md bg-white px-4 py-2 text-black border-none hover:bg-gray-200 shadow-md"
+                onClick={loadCycleRoster}
                 disabled={loading || submitting}
               >
                 {loading ? 'Loading…' : 'Refresh'}
@@ -359,9 +357,13 @@ export default function Page() {
           <hr className="my-4" />
 
           {!hasProceeded || !selected ? (
-            <div className="rounded-md p-3 text-black bg-gray-50 border">
+            <div className="rounded-md p-3 text-black bg-gray-50 border-none">
               <div className="text-sm text-black/70">
-                Select your name and click <span className="font-medium">Continue</span>.
+                Select your name and click{' '}
+                <span className="font-medium font-semibold">Continue</span>.
+              </div>
+              <div className="text-sm text-black/70 mt-1">
+                If you don't see your name, please contact the admin.
               </div>
             </div>
           ) : (
@@ -370,7 +372,10 @@ export default function Page() {
 
               <div className="text-sm mb-3">
                 <div className="mb-1">
-                  <a href="#" className="underline">
+                  <a
+                    href="https://www.meetup.com/do-write-writers-and-authors/"
+                    className="underline"
+                  >
                     Meetup link
                   </a>
                 </div>
@@ -494,6 +499,15 @@ export default function Page() {
               </div>
             </div>
           )}
+          <div className="mt-3 flex-wrap gap-2 justify-center">
+            <button className={basicButton}>Email Admin</button>
+            <a
+              className={seatingButton + ' mx-2 text-red-700'}
+              href="https://www.meetup.com/do-write-writers-and-authors/"
+            >
+              Meetup Link
+            </a>
+          </div>
         </div>
       </div>
     </main>
