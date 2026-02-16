@@ -1,4 +1,4 @@
-import { basicButton, participantButton, seatingButton } from '../components/buttonStyles'
+import { basicButton } from '../components/buttonStyles'
 
 type AttendanceStatus = 'unknown' | 'yes' | 'no' | 'maybe'
 type ReadingStatus = 'unassigned' | 'pending' | 'confirmed' | 'deferred'

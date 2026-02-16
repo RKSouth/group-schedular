@@ -23,6 +23,7 @@ type CycleParticipant = {
   attendance: AttendanceStatus
   reading: ReadingStatus
   responded_at: string | null
+  reading_description?: string | null
 
   // participant fields flattened by your /api/cycles/[cycleId]/participants route
   id: number
@@ -143,6 +144,9 @@ export default function Page() {
 
   // click-to-expand on master participant list (left side)
   const [openParticipantId, setOpenParticipantId] = useState<number | null>(null)
+
+  //view reader details
+  const [viewReaderDetails, setViewReaderDetails] = useState<CycleParticipant | null>(null)
 
   const seatedParticipants = useMemo(() => {
     return cycleParticipants.filter((person) => (person.attendance ?? 'unknown') === 'yes')
@@ -303,6 +307,7 @@ export default function Page() {
       }
       const roster = (await rosterRes.json()) as CycleParticipant[]
       setCycleParticipants(roster)
+      console.log('ADMIN ROSTER RAW:', roster[2].reading_description)
 
       // If the open person disappeared, close the panel
       if (openId !== null && !roster.some((person) => person.id === openId)) {
@@ -343,7 +348,10 @@ export default function Page() {
 
   return (
     <main className="min-h-screen bg-[url('/canadianFlags.jpg')] bg-cover bg-no-repeat bg-center">
-      <button className="fixed top-4 right-4 rounded border bg-white/80 px-3 py-1" onClick={logout}>
+      <button
+        className="fixed top-4 right-4 rounded  text-black border bg-white/80 px-3 py-1"
+        onClick={logout}
+      >
         Logout
       </button>
 
@@ -599,60 +607,88 @@ export default function Page() {
             </div>
           </div>
 
-          {/* Reader Schedule (UPDATED ONLY) */}
+          {/* Reader Schedule */}
           <div className="flex-1 flex flex-col p-4 bg-white/85 rounded-md">
             <h3 className="text-lg font-semibold text-gray-900 mb-2">Reader Schedule</h3>
-
             <div className="gap-4">
               {/* Up this week + up next week */}
               <div className="rounded-xl border bg-white p-3">
                 <div className="font-semibold text-gray-900 mb-2">Up this week</div>
-
                 {readerSchedule.thisWeek.main.length + readerSchedule.thisWeek.bonus.length ===
                 0 ? (
                   <div className="text-sm text-gray-600">No eligible readers.</div>
                 ) : (
-                  <ul className="flex flex-col gap-1">
+                  <ul className="flex flex-col gap-2">
                     {readerSchedule.thisWeek.main.map((person) => {
                       const rs = labelReading(person.reading)
+                      const cycleInfo = cycleByParticipantId.get(person.id)
                       return (
                         <li
                           key={`this-main-${person.id}`}
-                          className="flex items-center justify-between text-sm"
+                          className="rounded-lg border bg-white p-3"
                         >
-                          <button
-                            type="button"
-                            className="text-gray-900 underline decoration-black/30 hover:decoration-black"
-                            onClick={() => setOpenId(openId === person.id ? null : person.id)}
-                          >
-                            {person.name}
-                          </button>
-                          <div className="flex items-center gap-2">
-                            <Badge text="Main" tone="warn" />
-                            <Badge text={rs.text} tone={rs.tone} />
+                          <div className="flex items-start justify-between gap-3">
+                            <button
+                              type="button"
+                              className={seatingButton}
+                              onClick={() =>
+                                setViewReaderDetails(
+                                  viewReaderDetails?.id === person.id
+                                    ? null
+                                    : (cycleByParticipantId.get(person.id) ?? null)
+                                )
+                              }
+                            >
+                              {person.name}
+                            </button>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2">
+                                <Badge text={rs.text} tone={rs.tone} />
+                              </div>
+                            </div>
                           </div>
+                          {viewReaderDetails?.id === person.id && (
+                            <p className="text-sm text-gray-600">
+                              Summary: {cycleInfo?.reading_description ?? 'none yet'}
+                            </p>
+                          )}
                         </li>
                       )
                     })}
 
                     {readerSchedule.thisWeek.bonus.map((person) => {
                       const rs = labelReading(person.reading)
+                      const cycleInfo = cycleByParticipantId.get(person.id)
                       return (
                         <li
-                          key={`this-bonus-${person.id}`}
-                          className="flex items-center justify-between text-sm"
+                          key={`this-main-${person.id}`}
+                          className="rounded-lg border bg-white p-3"
                         >
-                          <button
-                            type="button"
-                            className="text-gray-900 underline decoration-black/30 hover:decoration-black"
-                            onClick={() => setOpenId(openId === person.id ? null : person.id)}
-                          >
-                            {person.name}
-                          </button>
-                          <div className="flex items-center gap-2">
-                            <Badge text="Bonus" tone="neutral" />
-                            <Badge text={rs.text} tone={rs.tone} />
+                          <div className="flex items-start justify-between gap-3">
+                            <button
+                              type="button"
+                              className={seatingButton}
+                              onClick={() =>
+                                setViewReaderDetails(
+                                  viewReaderDetails?.id === person.id
+                                    ? null
+                                    : (cycleByParticipantId.get(person.id) ?? null)
+                                )
+                              }
+                            >
+                              {person.name}
+                            </button>
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2">
+                                <Badge text={rs.text} tone={rs.tone} />
+                              </div>
+                            </div>
                           </div>
+                          {viewReaderDetails?.id === person.id && (
+                            <p className="text-sm text-gray-600">
+                              Summary: {cycleInfo?.reading_description ?? 'none yet'}
+                            </p>
+                          )}
                         </li>
                       )
                     })}
@@ -667,7 +703,7 @@ export default function Page() {
                 0 ? (
                   <div className="text-sm text-gray-600">No eligible readers.</div>
                 ) : (
-                  <ul className="flex flex-col gap-1">
+                  <ul className="flex flex-col gap-2">
                     {readerSchedule.nextWeek.main.map((person) => {
                       const rs = labelReading(person.reading)
                       return (
@@ -705,7 +741,6 @@ export default function Page() {
                             {person.name}
                           </button>
                           <div className="flex items-center gap-2">
-                            <Badge text="Bonus" tone="neutral" />
                             <Badge text={rs.text} tone={rs.tone} />
                           </div>
                         </li>

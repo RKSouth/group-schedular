@@ -1,5 +1,6 @@
 'use client'
 
+import { basicButton } from '@/app/components/buttonStyles'
 import { useState } from 'react'
 
 export default function AdminLoginPage() {
@@ -70,11 +71,7 @@ export default function AdminLoginPage() {
           </button>
         </label>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded bg-blue-600 text-black py-2 disabled:opacity-50"
-        >
+        <button type="submit" disabled={loading} className={basicButton + ' w-full'}>
           {loading ? 'Signing in…' : 'Sign in'}
         </button>
 
